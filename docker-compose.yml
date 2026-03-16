@@ -1,0 +1,99 @@
+# Sealpod — Docker Compose
+# Security-hardened orchestration with security hardening
+# Requires Docker Compose v2 and Docker Engine 25.0.3+
+
+services:
+  sealpod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        CLAUDE_CODE_VERSION: ${CLAUDE_CODE_VERSION:-2.1.76}
+    image: sealpod:${CLAUDE_CODE_VERSION:-2.1.76}
+    container_name: sealpod
+    hostname: sealpod
+
+    # --- PID 1: tini (built into Docker, zero overhead) ---
+    init: true
+
+    # --- Security hardening ---
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+      # Docker default seccomp and AppArmor profiles are used (not disabled)
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_ADMIN    # Required: iptables firewall setup (dropped post-init via capsh)
+      - NET_RAW      # Required: connection tracking (dropped post-init via capsh)
+      - SETPCAP      # Required: capsh needs this to drop caps from bounding set
+      - SETUID       # Required: gosu/capsh --user needs this to switch to node
+      - SETGID       # Required: gosu/capsh --user needs this to switch to node
+      - KILL         # Required: tini (PID 1, root) must signal child process (node user)
+
+    # --- Disable IPv6 (iptables only covers IPv4) ---
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: 1
+      net.ipv6.conf.default.disable_ipv6: 1
+
+    # --- Resource limits ---
+    mem_limit: 2g
+    memswap_limit: 2g    # Equal = disable swap (OOM kill, then restart)
+    cpus: 2.0
+    pids_limit: 512       # Fork bomb defense
+
+    # --- Writable tmpfs for read-only rootfs ---
+    tmpfs:
+      - /tmp:rw,nosuid,noexec,size=256m
+      - /run:rw,nosuid,size=64m
+      - /home/node/.cache:rw,nosuid,noexec,size=128m
+      - /home/node/.npm:rw,nosuid,noexec,size=128m
+      - /home/node/.config:rw,nosuid,noexec,size=64m
+      - /home/node/.local:rw,nosuid,noexec,size=64m
+
+    # --- Volumes ---
+    volumes:
+      # Claude OAuth credentials — sealpod-auth writes here on first auth
+      - ${CLAUDE_CONFIG_HOST_PATH:-~/.claude-docker}:/home/node/.claude:rw
+      # Workspace (for --spawn worktree mode and file access)
+      # WARNING: Everything under this path is accessible to the AI agent.
+      # Do not mount directories containing SSH keys, .env files with secrets,
+      # or other sensitive data unless needed for the agent's work.
+      - ${WORKSPACE_HOST_PATH:-.}:/workspace:rw
+      # GitHub CLI auth (read-only — uses host's gh login)
+      - ${HOME}/.config/gh:/home/node/.config/gh:ro
+
+    # --- Environment ---
+    environment:
+      - RC_NAME=${RC_NAME:-sealpod}
+      - RC_SPAWN=${RC_SPAWN:-worktree}
+      - RC_CAPACITY=${RC_CAPACITY:-32}
+      - RC_VERBOSE=${RC_VERBOSE:-false}
+      - CLAUDE_CONFIG_DIR=/home/node/.claude
+      - GH_TOKEN=${GH_TOKEN:-}
+      - DEVCONTAINER=true
+      - NODE_OPTIONS=--max-old-space-size=4096
+      - TZ=${TZ:-UTC}
+    env_file:
+      - path: .env
+        required: false
+
+    # --- Networking ---
+    # No ports exposed — Remote Control uses outbound HTTPS polling only.
+    networks:
+      - rc-internal
+
+    # --- Logging ---
+    logging:
+      driver: local
+      options:
+        max-size: "50m"
+        max-file: "5"
+        compress: "true"
+
+    restart: unless-stopped
+
+# --- Networks ---
+networks:
+  rc-internal:
+    driver: bridge

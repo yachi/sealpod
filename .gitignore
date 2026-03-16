@@ -1,0 +1,20 @@
+# Secrets
+.env
+secrets/
+*.pem
+*.key
+.credentials.json
+
+# macOS
+.DS_Store
+
+# Working artifacts
+.goal/
+.worktrees/
+workspace/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~

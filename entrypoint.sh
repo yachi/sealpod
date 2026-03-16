@@ -1,0 +1,121 @@
+#!/bin/bash
+set -euo pipefail
+
+# =============================================================================
+# Sealpod — Container Entrypoint
+# Runs as root. Phase 0: trust. Phase 1: firewall. Phase 2: capsh.
+# Firewall applies in ALL modes including passthrough.
+# =============================================================================
+
+echo "[entrypoint] Starting Sealpod container..."
+
+# --- Phase 0: Accept workspace trust + configure mktemp session hooks ---
+echo "[entrypoint] Setting workspace trust and session hooks..."
+gosu node node -e '
+const fs = require("fs");
+const configDir = process.env.CLAUDE_CONFIG_DIR;
+const claudeJson = configDir + "/.claude.json";
+const settingsJson = configDir + "/settings.json";
+
+try {
+  // Set workspace trust
+  const d = JSON.parse(fs.readFileSync(claudeJson, "utf8"));
+  d.projects = d.projects || {};
+  d.projects["/workspace"] = d.projects["/workspace"] || {};
+  d.projects["/workspace"].hasTrustDialogAccepted = true;
+  fs.writeFileSync(claudeJson, JSON.stringify(d));
+
+  // Configure WorktreeCreate/WorktreeRemove hooks for mktemp session isolation.
+  // This enables --spawn worktree WITHOUT a git repo — each session gets its own temp dir.
+  let settings = {};
+  try { settings = JSON.parse(fs.readFileSync(settingsJson, "utf8")); } catch(e) {}
+  settings.hooks = settings.hooks || {};
+  settings.hooks.WorktreeCreate = [{
+    hooks: [{
+      type: "command",
+      command: "bash -c \"NAME=$(jq -r .name); DIR=$(mktemp -d /tmp/claude-session-XXXXXX); echo \\\"[hook] Created session: $DIR ($NAME)\\\" >&2; echo \\\"$DIR\\\"\""
+    }]
+  }];
+  settings.hooks.WorktreeRemove = [{
+    hooks: [{
+      type: "command",
+      command: "bash -c \"DIR=$(jq -r .worktree_path); echo \\\"[hook] Removing session: $DIR\\\" >&2; rm -rf \\\"$DIR\\\"\""
+    }]
+  }];
+  fs.writeFileSync(settingsJson, JSON.stringify(settings, null, 2));
+  console.log("[entrypoint] Workspace trust + mktemp hooks configured.");
+} catch(e) {
+  console.error("[entrypoint] WARNING: Setup error:", e.message);
+}
+'
+
+# --- Phase 1: Firewall Setup (runs as root — requires NET_ADMIN) ---
+# Firewall applies in ALL modes including passthrough.
+echo "[entrypoint] Initializing outbound firewall..."
+if /usr/local/bin/init-firewall.sh; then
+  echo "[entrypoint] Firewall initialized successfully."
+else
+  echo "[entrypoint] ERROR: Firewall initialization failed. Exiting." >&2
+  exit 1
+fi
+
+# --- Passthrough mode: only 'claude' and 'sealpod-auth' commands allowed ---
+# Firewall is already active at this point.
+# Only 'claude' commands are permitted to prevent arbitrary shell access.
+if [ "$#" -gt 0 ]; then
+  if [ "$1" = "claude" ]; then
+    echo "[entrypoint] Passthrough: $*"
+    exec capsh \
+      --drop=cap_net_admin,cap_net_raw,cap_setpcap,cap_setuid,cap_setgid,cap_kill \
+      --user=node \
+      -- -c 'exec "$@"' -- "$@"
+  elif [ "$1" = "sealpod-auth" ]; then
+    shift
+    echo "[entrypoint] Running sealpod-auth..."
+    exec capsh \
+      --drop=cap_net_admin,cap_net_raw,cap_setpcap,cap_setuid,cap_setgid,cap_kill \
+      --user=node \
+      -- -c 'exec /usr/local/bin/sealpod-auth.sh "$@"' -- "$@"
+  else
+    echo "[entrypoint] ERROR: Only 'claude' and 'sealpod-auth' commands allowed." >&2
+    exit 1
+  fi
+fi
+
+# --- Pre-flight: credentials exist? ---
+if [ ! -f "${CLAUDE_CONFIG_DIR}/.credentials.json" ]; then
+  echo "" >&2
+  echo "================================================================" >&2
+  echo "  SEALPOD: No credentials found." >&2
+  echo "  Run: docker compose run --rm sealpod sealpod-auth" >&2
+  echo "================================================================" >&2
+  echo "" >&2
+  exit 1
+fi
+
+# --- Phase 2: Build remote-control command ---
+set -- claude remote-control
+
+if [ -n "${RC_NAME:-}" ]; then
+  set -- "$@" --name "${RC_NAME}"
+fi
+
+# Default to worktree (each session gets isolated mktemp dir via hooks)
+SPAWN_MODE="${RC_SPAWN:-worktree}"
+set -- "$@" --spawn "${SPAWN_MODE}"
+
+if [ -n "${RC_CAPACITY:-}" ] && [ "${RC_CAPACITY}" != "32" ]; then
+  set -- "$@" --capacity "${RC_CAPACITY}"
+fi
+
+if [ "${RC_VERBOSE:-false}" = "true" ]; then
+  set -- "$@" --verbose
+fi
+
+echo "[entrypoint] Executing as node: $*"
+
+# Drop ALL added capabilities and switch to node user via capsh.
+exec capsh \
+  --drop=cap_net_admin,cap_net_raw,cap_setpcap,cap_setuid,cap_setgid,cap_kill \
+  --user=node \
+  -- -c 'exec "$@"' -- "$@"

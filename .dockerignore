@@ -1,0 +1,10 @@
+.git
+.github
+.goal
+docs
+*.md
+!README.md
+.env
+.env.*
+!.env.example
+secrets/
