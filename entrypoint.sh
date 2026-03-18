@@ -9,6 +9,17 @@ set -euo pipefail
 
 echo "[entrypoint] Starting Sealpod container..."
 
+# --- Phase 1: Firewall Setup (runs as root — requires NET_ADMIN) ---
+# Firewall applies in ALL modes including passthrough.
+# Initialized FIRST so Phase 0 node process has no unrestricted network access.
+echo "[entrypoint] Initializing outbound firewall..."
+if /usr/local/bin/init-firewall.sh; then
+  echo "[entrypoint] Firewall initialized successfully."
+else
+  echo "[entrypoint] ERROR: Firewall initialization failed. Exiting." >&2
+  exit 1
+fi
+
 # --- Phase 0: Accept workspace trust + configure mktemp session hooks ---
 echo "[entrypoint] Setting workspace trust and session hooks..."
 gosu node node -e '
@@ -39,7 +50,7 @@ try {
   settings.hooks.WorktreeRemove = [{
     hooks: [{
       type: "command",
-      command: "bash -c \"DIR=$(jq -r .worktree_path); echo \\\"[hook] Removing session: $DIR\\\" >&2; rm -rf \\\"$DIR\\\"\""
+      command: "bash -c \"DIR=$(jq -r .worktree_path); [[ \\\"$DIR\\\" == /tmp/claude-session-* ]] || { echo \\\"[hook] ERROR: invalid path: $DIR\\\" >&2; exit 1; }; echo \\\"[hook] Removing session: $DIR\\\" >&2; rm -rf \\\"$DIR\\\"\""
     }]
   }];
   fs.writeFileSync(settingsJson, JSON.stringify(settings, null, 2));
@@ -48,16 +59,6 @@ try {
   console.error("[entrypoint] WARNING: Setup error:", e.message);
 }
 '
-
-# --- Phase 1: Firewall Setup (runs as root — requires NET_ADMIN) ---
-# Firewall applies in ALL modes including passthrough.
-echo "[entrypoint] Initializing outbound firewall..."
-if /usr/local/bin/init-firewall.sh; then
-  echo "[entrypoint] Firewall initialized successfully."
-else
-  echo "[entrypoint] ERROR: Firewall initialization failed. Exiting." >&2
-  exit 1
-fi
 
 # --- Passthrough mode: only 'claude' and 'sealpod-auth' commands allowed ---
 # Firewall is already active at this point.
