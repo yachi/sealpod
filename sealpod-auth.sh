@@ -14,6 +14,12 @@ set -euo pipefail
 # This gives the container its OWN independent OAuth session — no shared
 # refresh token with the host's Claude Code instance.
 #
+# During normal operation, `claude remote-control` auto-refreshes tokens
+# before each API call. Re-running this script is only needed after the
+# container has been stopped long enough for the refresh token to expire.
+# Always stop the container before re-authenticating to avoid credential
+# file conflicts from concurrent token refresh.
+#
 # Dependencies: openssl, curl, jq (all included in the container image)
 # =============================================================================
 
