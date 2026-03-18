@@ -162,11 +162,21 @@ All outbound HTTPS (port 443) is **open to any destination** — the firewall is
 # Check logs
 docker compose logs --tail 50
 
-# Re-authenticate
+# Re-authenticate (stop the container first to avoid token conflicts)
+docker compose stop
 docker compose run --rm sealpod sealpod-auth
+docker compose up -d
+```
 
-# Restart
-docker compose restart
+> **Note:** Always stop the container before re-authenticating. Running `sealpod-auth` while the container is live can cause credential file conflicts when the container refreshes its token.
+
+### Corrupted credentials
+
+If the container immediately shows `unhealthy` after a crash or `docker kill`, the credentials file may be corrupt (Claude Code's token refresh uses a non-atomic write). Fix:
+
+```bash
+rm ~/.claude-docker/.credentials.json
+docker compose run --rm sealpod sealpod-auth
 ```
 
 ### OOM kill (container keeps restarting)
@@ -177,6 +187,10 @@ Increase memory limit in `docker-compose.yml`:
 mem_limit: 4g
 memswap_limit: 4g
 ```
+
+### PID exhaustion
+
+If the container crashes without an OOM signal, PID exhaustion may be the cause. The default `pids_limit: 512` supports ~32 concurrent sessions under normal load, but synchronized peak subprocess use can exceed it. Increase `pids_limit` or reduce `RC_CAPACITY` in `docker-compose.yml`.
 
 ### Session timeout
 

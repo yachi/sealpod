@@ -45,7 +45,7 @@ services:
     # --- Writable tmpfs for read-only rootfs ---
     tmpfs:
       - /tmp:rw,nosuid,noexec,size=256m
-      - /run:rw,nosuid,size=64m
+      - /run:rw,nosuid,noexec,size=64m
       - /home/node/.cache:rw,nosuid,noexec,size=128m
       - /home/node/.npm:rw,nosuid,noexec,size=128m
       - /home/node/.config:rw,nosuid,noexec,size=64m
