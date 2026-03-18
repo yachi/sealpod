@@ -67,11 +67,11 @@ Remote Control requires a claude.ai subscription (Pro/Max/Team/Enterprise). API 
 
 The container gets its **own independent OAuth session** — it does not share tokens with your host's Claude Code installation. This avoids refresh token race conditions when running Claude Code on both the host and in Docker simultaneously.
 
-**Token lifetime:** 8 hours. The container's Claude Code process handles refresh automatically via the refresh token stored in `.credentials.json`.
+**Token lifetime:** Access tokens expire after ~8 hours (28800s). During active use, `claude remote-control` automatically refreshes tokens before each API call — no manual intervention needed while the container is running. The refresh token is stored in `.credentials.json`.
 
 ### Re-authentication
 
-When the token expires and cannot be refreshed (e.g., after a long downtime), re-run:
+Re-authentication is only needed after extended container downtime — if the container is stopped long enough for the refresh token to expire, both tokens become invalid. During normal operation (including brief restarts), tokens auto-refresh and no action is needed. To re-authenticate:
 
 ```bash
 docker compose run --rm sealpod sealpod-auth
@@ -82,6 +82,8 @@ docker compose run --rm sealpod sealpod-auth
 ```bash
 docker compose run --rm sealpod claude auth status
 ```
+
+> **Caveat:** `claude auth status` only checks whether a credentials file with an `accessToken` field exists — it does **not** validate token expiry. An expired token still returns exit 0. This means the healthcheck cannot detect a failed refresh or an expired token.
 
 > **Note:** Passthrough mode permits `claude` and `sealpod-auth` commands only — arbitrary shell access is blocked by the entrypoint. The iptables firewall is active in all modes.
 
@@ -151,7 +153,8 @@ All outbound HTTPS (port 443) is **open to any destination** — the firewall is
 - **HTTPS exfiltration is unrestricted**: Port 443 is fully open. A prompt injection can exfiltrate data to any HTTPS endpoint, not just Anthropic domains. The firewall does not mitigate this.
 - **Covert channels via Anthropic API**: Data can be embedded in normal `api.anthropic.com` traffic. Anthropic acknowledges this limitation.
 - **Workspace access**: Everything under `WORKSPACE_HOST_PATH` is accessible to the agent. Do not mount directories containing SSH keys, `.env` files with production secrets, or other sensitive data unless needed.
-- **Token refresh**: Access tokens expire every 8 hours. The Claude Code process refreshes them automatically using the refresh token. If the refresh token itself expires (e.g., after extended downtime), re-run `sealpod-auth`.
+- **Token refresh**: Access tokens expire every ~8 hours. During active use, `claude remote-control` auto-refreshes before each API call, so tokens stay valid indefinitely while running. If the container is stopped long enough for the refresh token to expire, re-run `sealpod-auth`.
+- **Healthcheck blind spot**: `claude auth status` (used by the healthcheck) only checks for credentials file existence — it does not verify token validity. An expired token still reports healthy (exit 0).
 - **Git CVE surface**: `git` is installed for `--spawn worktree` mode and has a history of CVEs. This is an accepted risk.
 
 ## Troubleshooting
