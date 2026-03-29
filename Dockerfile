@@ -37,8 +37,11 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
  && apt-get update && apt-get install -y --no-install-recommends gh \
  && rm -rf /var/lib/apt/lists/*
 
-# Install Claude Code CLI globally (pinned version)
-RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
+# Install Claude Code CLI and Playwright CLI globally
+# PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: browsers are large (~400MB); skip at build time.
+# The playwright-cli skill can install browsers on-demand if needed.
+RUN PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @playwright/cli@latest \
  && npm cache clean --force
 
 # Create workspace and config directories
