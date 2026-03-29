@@ -38,11 +38,13 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
  && rm -rf /var/lib/apt/lists/*
 
 # Install Claude Code CLI and Playwright CLI globally
-# PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: browsers are large (~400MB); skip at build time.
-# The playwright-cli skill can install browsers on-demand if needed.
+# PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: browser binary not baked in — installed on-demand at runtime.
+# System deps ARE installed here (need root), so runtime browser install just works.
 RUN PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
     npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @playwright/cli@latest \
- && npm cache clean --force
+ && npx playwright install-deps chromium \
+ && npm cache clean --force \
+ && rm -rf /var/lib/apt/lists/*
 
 # Create workspace and config directories
 RUN mkdir -p /workspace \
@@ -70,7 +72,8 @@ RUN chmod +x /usr/local/bin/entrypoint.sh \
 # Environment
 ENV CLAUDE_CONFIG_DIR=/home/node/.claude \
     DEVCONTAINER=true \
-    NODE_OPTIONS="--max-old-space-size=4096"
+    NODE_OPTIONS="--max-old-space-size=4096" \
+    PLAYWRIGHT_BROWSERS_PATH=/home/node/.claude/.playwright-browsers
 
 WORKDIR /workspace
 
