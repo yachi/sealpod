@@ -27,7 +27,7 @@ CLIENT_ID="9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 AUTH_URL="https://claude.ai/oauth/authorize"
 TOKEN_URL="https://platform.claude.com/v1/oauth/token"
 REDIRECT_URI="https://platform.claude.com/oauth/code/callback"
-SCOPES="org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
+SCOPES="user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
 
 # Use the same User-Agent as the CLI's axios HTTP client.
 # Cloudflare Bot Management blocks "claude-code/*" from curl but allows "axios/*".

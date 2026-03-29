@@ -1,5 +1,5 @@
 # Sealpod — Docker Compose
-# Security-hardened orchestration with security hardening
+# Security-hardened container orchestration
 # Requires Docker Compose v2 and Docker Engine 25.0.3+
 
 services:

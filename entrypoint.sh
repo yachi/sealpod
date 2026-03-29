@@ -3,7 +3,7 @@ set -euo pipefail
 
 # =============================================================================
 # Sealpod — Container Entrypoint
-# Runs as root. Phase 0: trust. Phase 1: firewall. Phase 2: capsh.
+# Runs as root. Phase 1: firewall (as root). Phase 2: trust (as node via gosu). Phase 3: exec with cap drop.
 # Firewall applies in ALL modes including passthrough.
 # =============================================================================
 
@@ -50,15 +50,42 @@ try {
   settings.hooks.WorktreeRemove = [{
     hooks: [{
       type: "command",
-      command: "bash -c \"DIR=$(jq -r .worktree_path); [[ \\\"$DIR\\\" == /tmp/claude-session-* ]] || { echo \\\"[hook] ERROR: invalid path: $DIR\\\" >&2; exit 1; }; echo \\\"[hook] Removing session: $DIR\\\" >&2; rm -rf \\\"$DIR\\\"\""
+      command: "bash -c \"DIR=$(jq -r .worktree_path); DIR=$(realpath -m \\\"$DIR\\\"); [[ \\\"$DIR\\\" == /tmp/claude-session-* ]] || { echo \\\"[hook] ERROR: invalid path: $DIR\\\" >&2; exit 1; }; echo \\\"[hook] Removing session: $DIR\\\" >&2; rm -rf \\\"$DIR\\\"\""
     }]
   }];
+  // Configure plugin marketplace for deep-research skill (cloned on first session, cached on volume).
+  settings.extraKnownMarketplaces = settings.extraKnownMarketplaces || {};
+  settings.extraKnownMarketplaces["claude-skills"] = {
+    source: { source: "github", repo: "yachi/claude-skills" }
+  };
+  settings.enabledPlugins = settings.enabledPlugins || {};
+  settings.enabledPlugins["deep-research@claude-skills"] = true;
+
   fs.writeFileSync(settingsJson, JSON.stringify(settings, null, 2));
-  console.log("[entrypoint] Workspace trust + mktemp hooks configured.");
+  console.log("[entrypoint] Workspace trust + mktemp hooks + plugin marketplace configured.");
 } catch(e) {
   console.error("[entrypoint] WARNING: Setup error:", e.message);
 }
 '
+
+# --- Install microsoft/playwright-cli skill (not a marketplace — standalone skill repo) ---
+PLAYWRIGHT_SKILL_DIR="${CLAUDE_CONFIG_DIR}/skills/playwright-cli"
+if [ ! -d "$PLAYWRIGHT_SKILL_DIR" ]; then
+  echo "[entrypoint] Installing playwright-cli skill..."
+  if gosu node git clone --depth 1 --filter=blob:none --sparse \
+    https://github.com/microsoft/playwright-cli.git /tmp/playwright-cli 2>/dev/null; then
+    cd /tmp/playwright-cli && gosu node git sparse-checkout set skills/playwright-cli 2>/dev/null
+    gosu node mkdir -p "${CLAUDE_CONFIG_DIR}/skills"
+    gosu node cp -r /tmp/playwright-cli/skills/playwright-cli "$PLAYWRIGHT_SKILL_DIR"
+    rm -rf /tmp/playwright-cli
+    echo "[entrypoint] playwright-cli skill installed."
+    cd /workspace
+  else
+    echo "[entrypoint] WARNING: Failed to clone playwright-cli skill." >&2
+  fi
+else
+  echo "[entrypoint] playwright-cli skill already installed."
+fi
 
 # --- Passthrough mode: only 'claude' and 'sealpod-auth' commands allowed ---
 # Firewall is already active at this point.
