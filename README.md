@@ -144,6 +144,17 @@ All outbound HTTPS (port 443) is **open to any destination** — the firewall is
 
 Sealpod configures `WorktreeCreate`/`WorktreeRemove` hooks that use `mktemp` instead of actual git worktrees. This means `--spawn worktree` works even when `/workspace` is not a git repository — each session gets an isolated `/tmp/claude-session-*` directory.
 
+### Pre-loaded Skills
+
+Sealpod configures two plugin marketplaces at container startup via `extraKnownMarketplaces` in `settings.json`:
+
+| Skill | Marketplace | Source |
+|-------|------------|--------|
+| `/deep-research` | `claude-skills` | [yachi/claude-skills](https://github.com/yachi/claude-skills) |
+| `/playwright-cli` | `arkhe-claude-plugins` | [joaquimscosta/arkhe-claude-plugins](https://github.com/joaquimscosta/arkhe-claude-plugins) |
+
+Plugins are cloned on the first session start (via HTTPS, which the firewall allows) and cached on the persistent credential volume for subsequent sessions.
+
 ### `--dangerously-skip-permissions`
 
 `claude remote-control` runs with this flag implicitly. In a containerized environment:

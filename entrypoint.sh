@@ -53,8 +53,20 @@ try {
       command: "bash -c \"DIR=$(jq -r .worktree_path); DIR=$(realpath -m \\\"$DIR\\\"); [[ \\\"$DIR\\\" == /tmp/claude-session-* ]] || { echo \\\"[hook] ERROR: invalid path: $DIR\\\" >&2; exit 1; }; echo \\\"[hook] Removing session: $DIR\\\" >&2; rm -rf \\\"$DIR\\\"\""
     }]
   }];
+  // Configure plugin marketplaces for skills (cloned on first session, cached on volume).
+  settings.extraKnownMarketplaces = settings.extraKnownMarketplaces || {};
+  settings.extraKnownMarketplaces["claude-skills"] = {
+    source: { source: "github", repo: "yachi/claude-skills" }
+  };
+  settings.extraKnownMarketplaces["arkhe-claude-plugins"] = {
+    source: { source: "github", repo: "joaquimscosta/arkhe-claude-plugins" }
+  };
+  settings.enabledPlugins = settings.enabledPlugins || {};
+  settings.enabledPlugins["deep-research@claude-skills"] = true;
+  settings.enabledPlugins["playwright@arkhe-claude-plugins"] = true;
+
   fs.writeFileSync(settingsJson, JSON.stringify(settings, null, 2));
-  console.log("[entrypoint] Workspace trust + mktemp hooks configured.");
+  console.log("[entrypoint] Workspace trust + mktemp hooks + plugin marketplaces configured.");
 } catch(e) {
   console.error("[entrypoint] WARNING: Setup error:", e.message);
 }
