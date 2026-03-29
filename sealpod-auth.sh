@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+umask 077  # Defense-in-depth: restrict permissions on all temp files
 
 # =============================================================================
 # sealpod-auth.sh — OAuth PKCE authentication for headless Docker containers

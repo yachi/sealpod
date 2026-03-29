@@ -9,6 +9,7 @@ ARG NODE_VERSION=20
 FROM node:${NODE_VERSION}-bookworm-slim
 
 ARG CLAUDE_CODE_VERSION=2.1.76
+ARG PLAYWRIGHT_CLI_VERSION=0.1.2
 
 # OCI labels
 LABEL org.opencontainers.image.title="sealpod" \
@@ -37,13 +38,14 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
  && apt-get update && apt-get install -y --no-install-recommends gh \
  && rm -rf /var/lib/apt/lists/*
 
-# Install Claude Code CLI and Playwright CLI globally
-# PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: browser binary not baked in — installed on-demand at runtime.
-# System deps ARE installed here (need root), so runtime browser install just works.
+# Install Claude Code CLI and Playwright CLI globally (pinned versions)
 RUN PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
-    npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @playwright/cli@latest \
- && npx playwright install-deps chromium \
- && npm cache clean --force \
+    npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @playwright/cli@${PLAYWRIGHT_CLI_VERSION} \
+ && npm cache clean --force
+
+# Install Chromium system dependencies (requires root — cannot be done at runtime).
+# Browser binary is NOT baked in — installed on-demand to a separate volume.
+RUN npx playwright install-deps chromium \
  && rm -rf /var/lib/apt/lists/*
 
 # Create workspace and config directories
@@ -73,7 +75,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh \
 ENV CLAUDE_CONFIG_DIR=/home/node/.claude \
     DEVCONTAINER=true \
     NODE_OPTIONS="--max-old-space-size=4096" \
-    PLAYWRIGHT_BROWSERS_PATH=/home/node/.claude/.playwright-browsers
+    PLAYWRIGHT_BROWSERS_PATH=/home/node/.playwright-browsers
 
 WORKDIR /workspace
 

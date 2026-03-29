@@ -53,13 +53,17 @@ try {
       command: "bash -c \"DIR=$(jq -r .worktree_path); DIR=$(realpath -m \\\"$DIR\\\"); [[ \\\"$DIR\\\" == /tmp/claude-session-* ]] || { echo \\\"[hook] ERROR: invalid path: $DIR\\\" >&2; exit 1; }; echo \\\"[hook] Removing session: $DIR\\\" >&2; rm -rf \\\"$DIR\\\"\""
     }]
   }];
-  // Configure plugin marketplace for deep-research skill (cloned on first session, cached on volume).
+  // Configure plugin marketplace for deep-research skill (merge, preserve user customizations).
   settings.extraKnownMarketplaces = settings.extraKnownMarketplaces || {};
-  settings.extraKnownMarketplaces["claude-skills"] = {
-    source: { source: "github", repo: "yachi/claude-skills" }
-  };
+  if (!settings.extraKnownMarketplaces["claude-skills"]) {
+    settings.extraKnownMarketplaces["claude-skills"] = {
+      source: { source: "github", repo: "yachi/claude-skills" }
+    };
+  }
   settings.enabledPlugins = settings.enabledPlugins || {};
-  settings.enabledPlugins["deep-research@claude-skills"] = true;
+  if (settings.enabledPlugins["deep-research@claude-skills"] === undefined) {
+    settings.enabledPlugins["deep-research@claude-skills"] = true;
+  }
 
   fs.writeFileSync(settingsJson, JSON.stringify(settings, null, 2));
   console.log("[entrypoint] Workspace trust + mktemp hooks + plugin marketplace configured.");
@@ -74,12 +78,11 @@ if [ ! -d "$PLAYWRIGHT_SKILL_DIR" ]; then
   echo "[entrypoint] Installing playwright-cli skill..."
   if gosu node git clone --depth 1 --filter=blob:none --sparse \
     https://github.com/microsoft/playwright-cli.git /tmp/playwright-cli 2>/dev/null; then
-    cd /tmp/playwright-cli && gosu node git sparse-checkout set skills/playwright-cli 2>/dev/null
+    (cd /tmp/playwright-cli && gosu node git sparse-checkout set skills/playwright-cli 2>/dev/null)
     gosu node mkdir -p "${CLAUDE_CONFIG_DIR}/skills"
     gosu node cp -r /tmp/playwright-cli/skills/playwright-cli "$PLAYWRIGHT_SKILL_DIR"
     rm -rf /tmp/playwright-cli
     echo "[entrypoint] playwright-cli skill installed."
-    cd /workspace
   else
     echo "[entrypoint] WARNING: Failed to clone playwright-cli skill." >&2
   fi
