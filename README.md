@@ -146,14 +146,14 @@ Sealpod configures `WorktreeCreate`/`WorktreeRemove` hooks that use `mktemp` ins
 
 ### Pre-loaded Skills
 
-Sealpod configures two plugin marketplaces at container startup via `extraKnownMarketplaces` in `settings.json`:
+Sealpod installs two skills at container startup:
 
-| Skill | Marketplace | Source |
-|-------|------------|--------|
-| `/deep-research` | `claude-skills` | [yachi/claude-skills](https://github.com/yachi/claude-skills) |
-| `/playwright-cli` | `arkhe-claude-plugins` | [joaquimscosta/arkhe-claude-plugins](https://github.com/joaquimscosta/arkhe-claude-plugins) |
+| Skill | Method | Source |
+|-------|--------|--------|
+| `/deep-research` | Plugin marketplace (`extraKnownMarketplaces`) | [yachi/claude-skills](https://github.com/yachi/claude-skills) |
+| `/playwright-cli` | Personal skill (sparse clone to `~/.claude/skills/`) | [microsoft/playwright-cli](https://github.com/microsoft/playwright-cli) |
 
-Plugins are cloned on the first session start (via HTTPS, which the firewall allows) and cached on the persistent credential volume for subsequent sessions.
+Both are cloned via HTTPS on first startup (the firewall allows port 443) and cached on the persistent credential volume for subsequent sessions.
 
 ### `--dangerously-skip-permissions`
 
