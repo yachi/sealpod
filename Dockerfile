@@ -9,7 +9,7 @@ ARG NODE_VERSION=20
 FROM node:${NODE_VERSION}-bookworm-slim
 
 ARG CLAUDE_CODE_VERSION=2.1.76
-ARG PLAYWRIGHT_CLI_VERSION=0.1.2
+ARG PLAYWRIGHT_CLI_VERSION=0.1.1
 
 # OCI labels
 LABEL org.opencontainers.image.title="sealpod" \
