@@ -3,7 +3,7 @@ set -euo pipefail
 
 # =============================================================================
 # Sealpod — Container Entrypoint
-# Runs as root. Phase 0: trust. Phase 1: firewall. Phase 2: capsh.
+# Runs as root. Phase 1: firewall (as root). Phase 2: trust (as node via gosu). Phase 3: exec with cap drop.
 # Firewall applies in ALL modes including passthrough.
 # =============================================================================
 
@@ -50,7 +50,7 @@ try {
   settings.hooks.WorktreeRemove = [{
     hooks: [{
       type: "command",
-      command: "bash -c \"DIR=$(jq -r .worktree_path); [[ \\\"$DIR\\\" == /tmp/claude-session-* ]] || { echo \\\"[hook] ERROR: invalid path: $DIR\\\" >&2; exit 1; }; echo \\\"[hook] Removing session: $DIR\\\" >&2; rm -rf \\\"$DIR\\\"\""
+      command: "bash -c \"DIR=$(jq -r .worktree_path); DIR=$(realpath -m \\\"$DIR\\\"); [[ \\\"$DIR\\\" == /tmp/claude-session-* ]] || { echo \\\"[hook] ERROR: invalid path: $DIR\\\" >&2; exit 1; }; echo \\\"[hook] Removing session: $DIR\\\" >&2; rm -rf \\\"$DIR\\\"\""
     }]
   }];
   fs.writeFileSync(settingsJson, JSON.stringify(settings, null, 2));

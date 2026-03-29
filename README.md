@@ -25,9 +25,9 @@ Users connect via claude.ai/code or the Claude mobile app.
 
 ## Prerequisites
 
-- **Docker Engine 25.0.3+** (mitigates CVE-2024-21626)
+- **Docker Engine 25.0.2+** (mitigates CVE-2024-21626)
 - **Docker Compose v2**
-- **Claude Pro, Max, Team, or Enterprise subscription** (API keys are NOT supported for Remote Control)
+- **Claude subscription** (all plans; API keys are NOT supported). Team/Enterprise admins must enable Remote Control in [admin settings](https://claude.ai/admin-settings/claude-code).
 
 ## Quick Start
 
@@ -140,13 +140,17 @@ All outbound HTTPS (port 443) is **open to any destination** — the firewall is
 - Data exfiltration via HTTPS to arbitrary domains (port 443 is open; WebFetch can reach any host)
 - Covert channels tunneled through `api.anthropic.com` or other permitted HTTPS endpoints
 
+### Worktree Mode Without Git
+
+Sealpod configures `WorktreeCreate`/`WorktreeRemove` hooks that use `mktemp` instead of actual git worktrees. This means `--spawn worktree` works even when `/workspace` is not a git repository — each session gets an isolated `/tmp/claude-session-*` directory.
+
 ### `--dangerously-skip-permissions`
 
 `claude remote-control` runs with this flag implicitly. In a containerized environment:
 - The **container** is the security boundary (firewall, read-only FS, capability drop)
 - Permission prompts would cause the headless process to hang indefinitely
 - Community Docker setups for Claude Code use this pattern
-- Anthropic's [devcontainer reference](https://github.com/anthropics/claude-code/tree/main/.devcontainer) uses this pattern when a firewall provides isolation
+- Anthropic's [devcontainer documentation](https://code.claude.com/docs/en/devcontainer) recommends this pattern when firewall isolation is in place
 
 ### Known Limitations
 
@@ -155,6 +159,7 @@ All outbound HTTPS (port 443) is **open to any destination** — the firewall is
 - **Workspace access**: Everything under `WORKSPACE_HOST_PATH` is accessible to the agent. Do not mount directories containing SSH keys, `.env` files with production secrets, or other sensitive data unless needed.
 - **Token refresh**: Access tokens expire every ~8 hours. During active use, `claude remote-control` auto-refreshes before each API call, so tokens stay valid indefinitely while running. If the container is stopped long enough for the refresh token to expire, re-run `sealpod-auth`.
 - **Healthcheck blind spot**: `claude auth status` (used by the healthcheck) only checks for credentials file existence — it does not verify token validity. An expired token still reports healthy (exit 0).
+- **Token refresh scope loss**: An upstream Claude Code bug ([#34785](https://github.com/anthropics/claude-code/issues/34785)) can cause refreshed tokens to lose required scopes, resulting in 403 errors after ~8 hours. If this occurs, re-run `sealpod-auth`.
 - **Git CVE surface**: `git` is installed for `--spawn worktree` mode and has a history of CVEs. This is an accepted risk.
 
 ## Troubleshooting
