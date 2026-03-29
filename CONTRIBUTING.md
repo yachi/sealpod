@@ -24,7 +24,7 @@ Keep PRs focused. One logical change per PR makes review faster.
 
 Requirements:
 
-- Docker Engine 25.0.3+ and Docker Compose v2
+- Docker Engine 25.0.2+ and Docker Compose v2
 - `shellcheck` (for shell script linting)
 
 Setup:

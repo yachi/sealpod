@@ -1,6 +1,6 @@
 # Sealpod — Docker Compose
 # Security-hardened container orchestration
-# Requires Docker Compose v2 and Docker Engine 25.0.3+
+# Requires Docker Compose v2 and Docker Engine 25.0.2+
 
 services:
   sealpod:
@@ -60,8 +60,10 @@ services:
       # Do not mount directories containing SSH keys, .env files with secrets,
       # or other sensitive data unless needed for the agent's work.
       - ${WORKSPACE_HOST_PATH:-.}:/workspace:rw
-      # GitHub CLI auth (read-only — uses host's gh login)
-      - ${HOME}/.config/gh:/home/node/.config/gh:ro
+      # Playwright browser binary cache (separate from credentials)
+      - ${PLAYWRIGHT_HOST_PATH:-~/.sealpod-playwright}:/home/node/.playwright-browsers:rw
+      # GitHub CLI auth (read-only — optional, remove if gh is not used)
+      - ${GH_CONFIG_HOST_PATH:-~/.config/gh}:/home/node/.config/gh:ro
 
     # --- Environment ---
     environment:

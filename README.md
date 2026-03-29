@@ -99,6 +99,8 @@ docker compose run --rm sealpod claude auth status
 | `RC_VERBOSE` | `false` | Enable verbose logging |
 | `CLAUDE_CONFIG_HOST_PATH` | `~/.claude-docker` | Host path to Claude credentials directory |
 | `WORKSPACE_HOST_PATH` | `.` (current dir) | Host path to workspace directory |
+| `GH_CONFIG_HOST_PATH` | `~/.config/gh` | Host path for GitHub CLI config (mounted read-only; remove volume if unused) |
+| `PLAYWRIGHT_HOST_PATH` | `~/.sealpod-playwright` | Host path for Playwright browser binary cache |
 | `TZ` | `UTC` | Container timezone |
 
 ### Credential Persistence
