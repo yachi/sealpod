@@ -94,6 +94,14 @@ else
   echo "[entrypoint] playwright-cli skill already installed."
 fi
 
+# --- Deploy default Playwright CLI config (if not already customized) ---
+PLAYWRIGHT_CONFIG="/workspace/.playwright/cli.config.json"
+if [ ! -f "$PLAYWRIGHT_CONFIG" ]; then
+  gosu node mkdir -p /workspace/.playwright
+  gosu node cp /usr/local/share/sealpod/playwright-cli.config.json "$PLAYWRIGHT_CONFIG"
+  echo "[entrypoint] Playwright CLI config deployed (file:// blocked, isolated sessions)."
+fi
+
 # --- Passthrough mode: only 'claude' and 'sealpod-auth' commands allowed ---
 # Firewall is already active at this point.
 # Only 'claude' commands are permitted to prevent arbitrary shell access.
