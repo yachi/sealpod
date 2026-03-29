@@ -8,7 +8,7 @@ set -euo pipefail
 #   1. Generates PKCE verifier/challenge + state
 #   2. Prints authorization URL for the user to open in any browser
 #   3. User authorizes and copies the code from the callback page
-#   4. Exchanges code for tokens at console.anthropic.com
+#   4. Exchanges code for tokens at platform.claude.com
 #   5. Writes ~/.claude/.credentials.json
 #
 # This gives the container its OWN independent OAuth session — no shared
@@ -25,9 +25,13 @@ set -euo pipefail
 
 CLIENT_ID="9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 AUTH_URL="https://claude.ai/oauth/authorize"
-TOKEN_URL="https://console.anthropic.com/v1/oauth/token"
-REDIRECT_URI="https://console.anthropic.com/oauth/code/callback"
+TOKEN_URL="https://platform.claude.com/v1/oauth/token"
+REDIRECT_URI="https://platform.claude.com/oauth/code/callback"
 SCOPES="org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
+
+# Use the same User-Agent as the CLI's axios HTTP client.
+# Cloudflare Bot Management blocks "claude-code/*" from curl but allows "axios/*".
+UA="axios/1.9.0"
 
 CRED_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 CRED_FILE="${CRED_DIR}/.credentials.json"
@@ -147,33 +151,73 @@ REQUEST_BODY=$(jq -n \
   --arg state "$STATE" \
   '{grant_type: $grant_type, code: $code, redirect_uri: $redirect_uri, client_id: $client_id, code_verifier: $code_verifier, state: $state}')
 
-HTTP_RESPONSE=$(curl -s --connect-timeout 10 --max-time 30 -w "\n%{http_code}" \
-  -X POST "${TOKEN_URL}" \
-  -H "Content-Type: application/json" \
-  -d "$REQUEST_BODY")
+MAX_RETRIES=5
+RETRY=0
+HEADER_FILE=$(mktemp)
+trap 'rm -f "$TMPFILE" "$HEADER_FILE" 2>/dev/null' EXIT
+while true; do
+  HTTP_RESPONSE=$(curl -s --connect-timeout 10 --max-time 30 -w "\n%{http_code}" \
+    -D "$HEADER_FILE" \
+    -X POST "${TOKEN_URL}" \
+    -H "Content-Type: application/json" \
+    -H "User-Agent: ${UA}" \
+    -d "$REQUEST_BODY")
 
-HTTP_CODE=$(printf '%s' "$HTTP_RESPONSE" | tail -1)
-BODY=$(printf '%s' "$HTTP_RESPONSE" | sed '$d')
+  HTTP_CODE=$(printf '%s' "$HTTP_RESPONSE" | tail -1)
+  BODY=$(printf '%s' "$HTTP_RESPONSE" | sed '$d')
 
-if [ "$HTTP_CODE" = "000" ]; then
-  echo "ERROR: Could not reach Anthropic servers. Check your internet connection." >&2
-  exit 1
-fi
-
-if [ "$HTTP_CODE" = "400" ]; then
-  ERROR_TYPE=$(printf '%s' "$BODY" | jq -r '.error // ""' 2>/dev/null)
-  if [ "$ERROR_TYPE" = "invalid_grant" ]; then
-    echo "ERROR: The authorization code has expired or was already used." >&2
-    echo "Re-run: docker compose run --rm sealpod sealpod-auth" >&2
+  if [ "$HTTP_CODE" = "000" ]; then
+    echo "ERROR: Could not reach Anthropic servers. Check your internet connection." >&2
     exit 1
   fi
-fi
 
-if [ "$HTTP_CODE" != "200" ]; then
-  echo "ERROR: Token exchange failed (HTTP ${HTTP_CODE}):" >&2
-  echo "$BODY" >&2
-  exit 1
-fi
+  if [ "$HTTP_CODE" = "400" ]; then
+    ERROR_TYPE=$(printf '%s' "$BODY" | jq -r '.error // ""' 2>/dev/null)
+    if [ "$ERROR_TYPE" = "invalid_grant" ]; then
+      echo "ERROR: The authorization code has expired or was already used." >&2
+      echo "Re-run: docker compose run --rm sealpod sealpod-auth" >&2
+      exit 1
+    fi
+  fi
+
+  # Retry on 429 with exponential backoff
+  if [ "$HTTP_CODE" = "429" ]; then
+    RETRY=$((RETRY + 1))
+    # Show all rate-limit related headers
+    echo "  --- Rate limit headers ---"
+    grep -iE 'retry-after|x-ratelimit|ratelimit|x-rate' "$HEADER_FILE" 2>/dev/null | sed 's/^/    /' || echo "    (none)"
+    echo "  --- Response body (full) ---"
+    echo "    $BODY"
+    echo "  -------------------------"
+    if [ "$RETRY" -gt "$MAX_RETRIES" ]; then
+      echo "ERROR: Rate limited after ${MAX_RETRIES} retries." >&2
+      echo "All response headers:" >&2
+      cat "$HEADER_FILE" >&2
+      exit 1
+    fi
+    # Use Retry-After header if present, otherwise exponential backoff
+    RETRY_AFTER=$(grep -i 'retry-after' "$HEADER_FILE" 2>/dev/null | head -1 | tr -dc '0-9')
+    if [ -n "$RETRY_AFTER" ] && [ "$RETRY_AFTER" -gt 0 ] 2>/dev/null; then
+      DELAY="$RETRY_AFTER"
+    else
+      DELAY=$(( 2 ** RETRY ))
+    fi
+    echo "  Rate limited (429). Retrying in ${DELAY}s... (attempt ${RETRY}/${MAX_RETRIES})"
+    sleep "$DELAY"
+    continue
+  fi
+
+  if [ "$HTTP_CODE" != "200" ]; then
+    echo "ERROR: Token exchange failed (HTTP ${HTTP_CODE}):" >&2
+    echo "$BODY" >&2
+    echo "" >&2
+    echo "Response headers:" >&2
+    cat "$HEADER_FILE" >&2
+    exit 1
+  fi
+
+  break
+done
 
 # --- Parse response ---
 
@@ -200,15 +244,50 @@ SCOPES_JSON=$(printf '%s' "$SCOPE_STR" | jq -R 'split(" ") | map(select(. != "")
 echo "Fetching account profile..."
 
 SUB_TYPE="null"
-PROFILE_RESP=$(curl -s --connect-timeout 10 --max-time 15 -w "\n%{http_code}" \
-  -H "Authorization: Bearer ${ACCESS_TOKEN}" \
-  -H "anthropic-beta: oauth-2025-04-20" \
-  "https://api.anthropic.com/api/oauth/profile" 2>/dev/null) || true
+RATE_TIER=""
+PROFILE_RETRIES=3
+for PROFILE_ATTEMPT in $(seq 1 "$PROFILE_RETRIES"); do
+  PROFILE_RESP=$(curl -s --connect-timeout 10 --max-time 15 -w "\n%{http_code}" \
+    -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+    -H "User-Agent: ${UA}" \
+    -H "anthropic-beta: oauth-2025-04-20" \
+    "https://api.anthropic.com/api/oauth/profile" 2>/dev/null) || true
 
-PROFILE_HTTP=$(printf '%s' "$PROFILE_RESP" | tail -1)
-if [ "$PROFILE_HTTP" = "200" ]; then
-  PROFILE_BODY=$(printf '%s' "$PROFILE_RESP" | sed '$d')
-  SUB_TYPE=$(printf '%s' "$PROFILE_BODY" | jq '.subscriptionType // .subscription_type // null') || SUB_TYPE="null"
+  PROFILE_HTTP=$(printf '%s' "$PROFILE_RESP" | tail -1)
+  if [ "$PROFILE_HTTP" = "200" ]; then
+    PROFILE_BODY=$(printf '%s' "$PROFILE_RESP" | sed '$d')
+    # Map organization_type to the short names the CLI uses for GrowthBook targeting
+    RAW_ORG_TYPE=$(printf '%s' "$PROFILE_BODY" | jq -r '.organization.organization_type // ""')
+    RATE_TIER=$(printf '%s' "$PROFILE_BODY" | jq -r '.organization.rate_limit_tier // ""')
+    case "$RAW_ORG_TYPE" in
+      claude_max)        SUB_TYPE='"max"' ;;
+      claude_pro)        SUB_TYPE='"pro"' ;;
+      claude_team)       SUB_TYPE='"team"' ;;
+      claude_enterprise) SUB_TYPE='"enterprise"' ;;
+      *)
+        # Fallback: try top-level fields
+        SUB_TYPE=$(printf '%s' "$PROFILE_BODY" | jq '.subscriptionType // .subscription_type // null') || SUB_TYPE="null"
+        ;;
+    esac
+    break
+  elif [ "$PROFILE_HTTP" = "429" ] && [ "$PROFILE_ATTEMPT" -lt "$PROFILE_RETRIES" ]; then
+    DELAY=$(( 2 ** PROFILE_ATTEMPT ))
+    echo "  Profile fetch rate limited. Retrying in ${DELAY}s... (${PROFILE_ATTEMPT}/${PROFILE_RETRIES})"
+    sleep "$DELAY"
+  else
+    echo "  Profile fetch failed (HTTP ${PROFILE_HTTP}), attempt ${PROFILE_ATTEMPT}/${PROFILE_RETRIES}"
+    if [ "$PROFILE_ATTEMPT" -lt "$PROFILE_RETRIES" ]; then sleep 2; fi
+  fi
+done
+
+if [ "$SUB_TYPE" = "null" ]; then
+  echo ""
+  echo "WARNING: Could not determine subscription type. Remote Control may fail with"
+  echo "  'not yet enabled for your account' because the feature gate requires a known plan."
+  echo ""
+  echo "If this happens, re-run sealpod-auth after a few minutes. If the problem persists,"
+  echo "  set subscriptionType manually in ${CRED_FILE} to one of:"
+  echo '  "pro", "max", "team", or "enterprise"'
 fi
 
 # --- Write credentials ---
@@ -216,13 +295,19 @@ fi
 mkdir -p "$CRED_DIR"
 chmod 700 "$CRED_DIR"
 
+RATE_TIER_JSON="null"
+if [ -n "$RATE_TIER" ]; then
+  RATE_TIER_JSON="\"$RATE_TIER\""
+fi
+
 CRED_JSON=$(jq -n \
   --arg at "$ACCESS_TOKEN" \
   --arg rt "$REFRESH_TOKEN" \
   --argjson ea "$EXPIRES_AT" \
   --argjson sc "$SCOPES_JSON" \
   --argjson st "$SUB_TYPE" \
-  '{claudeAiOauth: {accessToken: $at, refreshToken: $rt, expiresAt: $ea, scopes: $sc, subscriptionType: $st}}')
+  --argjson rt_tier "$RATE_TIER_JSON" \
+  '{claudeAiOauth: {accessToken: $at, refreshToken: $rt, expiresAt: $ea, scopes: $sc, subscriptionType: $st, rateLimitTier: $rt_tier}}')
 
 # Atomic write
 TMPFILE=$(mktemp "${CRED_DIR}/.credentials.XXXXXX")
