@@ -53,7 +53,7 @@ try {
       command: "bash -c \"DIR=$(jq -r .worktree_path); DIR=$(realpath -m \\\"$DIR\\\"); [[ \\\"$DIR\\\" == /tmp/claude-session-* ]] || { echo \\\"[hook] ERROR: invalid path: $DIR\\\" >&2; exit 1; }; echo \\\"[hook] Removing session: $DIR\\\" >&2; rm -rf \\\"$DIR\\\"\""
     }]
   }];
-  // Configure plugin marketplace for deep-research skill (merge, don't overwrite user customizations).
+  // Configure plugin marketplace for deep-research skill (merge, preserve user customizations).
   settings.extraKnownMarketplaces = settings.extraKnownMarketplaces || {};
   if (!settings.extraKnownMarketplaces["claude-skills"]) {
     settings.extraKnownMarketplaces["claude-skills"] = {
