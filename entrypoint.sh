@@ -9,6 +9,10 @@ set -euo pipefail
 
 echo "[entrypoint] Starting Sealpod container..."
 
+# --- Fix tmpfs and volume ownership (Docker creates them as root) ---
+chown node:node /home/node/.cache /home/node/.npm /home/node/.config /home/node/.local \
+  /home/node/.playwright-browsers 2>/dev/null || true
+
 # --- Phase 1: Firewall Setup (runs as root — requires NET_ADMIN) ---
 # Firewall applies in ALL modes including passthrough.
 # Initialized FIRST so Phase 0 node process has no unrestricted network access.
@@ -88,6 +92,14 @@ if [ ! -d "$PLAYWRIGHT_SKILL_DIR" ]; then
   fi
 else
   echo "[entrypoint] playwright-cli skill already installed."
+fi
+
+# --- Deploy default Playwright CLI config (if not already customized) ---
+PLAYWRIGHT_CONFIG="/workspace/.playwright/cli.config.json"
+if [ ! -f "$PLAYWRIGHT_CONFIG" ]; then
+  gosu node mkdir -p /workspace/.playwright
+  gosu node cp /usr/local/share/sealpod/playwright-cli.config.json "$PLAYWRIGHT_CONFIG"
+  echo "[entrypoint] Playwright CLI config deployed (file:// blocked, isolated sessions)."
 fi
 
 # --- Passthrough mode: only 'claude' and 'sealpod-auth' commands allowed ---

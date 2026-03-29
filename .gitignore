@@ -12,6 +12,8 @@ secrets/
 .goal/
 .worktrees/
 workspace/
+.playwright/
+.playwright-cli/
 
 # Editor
 .vscode/

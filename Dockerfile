@@ -9,7 +9,7 @@ ARG NODE_VERSION=20
 FROM node:${NODE_VERSION}-bookworm-slim
 
 ARG CLAUDE_CODE_VERSION=2.1.76
-ARG PLAYWRIGHT_CLI_VERSION=0.1.2
+ARG PLAYWRIGHT_CLI_VERSION=0.1.1
 
 # OCI labels
 LABEL org.opencontainers.image.title="sealpod" \
@@ -45,7 +45,12 @@ RUN PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
 
 # Install Chromium system dependencies (requires root — cannot be done at runtime).
 # Browser binary is NOT baked in — installed on-demand to a separate volume.
+# Also install PDF/OCR tools for Claude Code's Read tool and menu scraping.
 RUN npx playwright install-deps chromium \
+ && apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    poppler-utils \
+    tesseract-ocr \
+    tesseract-ocr-eng \
  && rm -rf /var/lib/apt/lists/*
 
 # Create workspace and config directories
@@ -58,6 +63,9 @@ RUN mkdir -p /workspace \
     /home/node/.npm \
     /tmp/claude-sessions \
  && chown -R node:node /workspace /home/node /tmp/claude-sessions
+
+# Copy Playwright CLI default config (deployed to /workspace by entrypoint if absent)
+COPY playwright-cli.config.json /usr/local/share/sealpod/playwright-cli.config.json
 
 # Copy scripts
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
@@ -75,7 +83,8 @@ RUN chmod +x /usr/local/bin/entrypoint.sh \
 ENV CLAUDE_CONFIG_DIR=/home/node/.claude \
     DEVCONTAINER=true \
     NODE_OPTIONS="--max-old-space-size=4096" \
-    PLAYWRIGHT_BROWSERS_PATH=/home/node/.playwright-browsers
+    PLAYWRIGHT_BROWSERS_PATH=/home/node/.playwright-browsers \
+    XDG_CACHE_HOME=/home/node/.cache
 
 WORKDIR /workspace
 
