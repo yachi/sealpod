@@ -20,7 +20,8 @@ services:
     read_only: true
     security_opt:
       - no-new-privileges:true
-      # Docker default seccomp and AppArmor profiles are used (not disabled)
+      - seccomp=./chrome-seccomp.json
+      # Custom seccomp enables Chromium's namespace sandbox (CLONE_NEWUSER+CLONE_NEWPID only)
     cap_drop:
       - ALL
     cap_add:
@@ -37,16 +38,21 @@ services:
       net.ipv6.conf.default.disable_ipv6: 1
 
     # --- Resource limits ---
-    mem_limit: 2g
-    memswap_limit: 2g    # Equal = disable swap (OOM kill, then restart)
+    # Defaults sized for Claude Code without browser.
+    # When SEALPOD_BROWSER_ENABLED=true, set in .env:
+    #   SEALPOD_MEM_LIMIT=4g  SEALPOD_PIDS_LIMIT=1024
+    mem_limit: ${SEALPOD_MEM_LIMIT:-2g}
+    memswap_limit: ${SEALPOD_MEM_LIMIT:-2g}
     cpus: 2.0
-    pids_limit: 512       # Fork bomb defense
+    pids_limit: ${SEALPOD_PIDS_LIMIT:-512}
 
     # --- Writable tmpfs for read-only rootfs ---
+    # Sizes accommodate browser use (tmpfs only consumes RAM for actual content).
     tmpfs:
-      - /tmp:rw,nosuid,noexec,size=256m
+      - /tmp:rw,nosuid,noexec,size=512m
+      - /dev/shm:rw,nosuid,noexec,nodev,size=512m
       - /run:rw,nosuid,noexec,size=64m
-      - /home/node/.cache:rw,nosuid,noexec,size=128m
+      - /home/node/.cache:rw,nosuid,noexec,size=256m
       - /home/node/.npm:rw,nosuid,noexec,size=128m
       - /home/node/.config:rw,nosuid,noexec,size=64m
       - /home/node/.local:rw,nosuid,noexec,size=64m
@@ -74,6 +80,7 @@ services:
       - CLAUDE_CONFIG_DIR=/home/node/.claude
       - GH_TOKEN=${GH_TOKEN:-}
       - DEVCONTAINER=true
+      - SEALPOD_BROWSER_ENABLED=${SEALPOD_BROWSER_ENABLED:-false}
       - NODE_OPTIONS=--max-old-space-size=4096
       - TZ=${TZ:-UTC}
     env_file:

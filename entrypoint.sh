@@ -10,8 +10,9 @@ set -euo pipefail
 echo "[entrypoint] Starting Sealpod container..."
 
 # --- Fix tmpfs and volume ownership (Docker creates them as root) ---
-chown node:node /home/node/.cache /home/node/.npm /home/node/.config /home/node/.local \
-  /home/node/.playwright-browsers 2>/dev/null || true
+# Credential volume contents (plugins, settings) may be host-user-owned; fix recursively.
+chown -R node:node /home/node/.claude /home/node/.cache /home/node/.npm /home/node/.config \
+  /home/node/.local /home/node/.playwright-browsers 2>/dev/null || true
 
 # --- Phase 1: Firewall Setup (runs as root — requires NET_ADMIN) ---
 # Firewall applies in ALL modes including passthrough.
@@ -76,30 +77,40 @@ try {
 }
 '
 
-# --- Install microsoft/playwright-cli skill (not a marketplace — standalone skill repo) ---
-PLAYWRIGHT_SKILL_DIR="${CLAUDE_CONFIG_DIR}/skills/playwright-cli"
-if [ ! -d "$PLAYWRIGHT_SKILL_DIR" ]; then
-  echo "[entrypoint] Installing playwright-cli skill..."
-  if gosu node git clone --depth 1 --filter=blob:none --sparse \
-    https://github.com/microsoft/playwright-cli.git /tmp/playwright-cli 2>/dev/null; then
-    (cd /tmp/playwright-cli && gosu node git sparse-checkout set skills/playwright-cli 2>/dev/null)
-    gosu node mkdir -p "${CLAUDE_CONFIG_DIR}/skills"
-    gosu node cp -r /tmp/playwright-cli/skills/playwright-cli "$PLAYWRIGHT_SKILL_DIR"
-    rm -rf /tmp/playwright-cli
-    echo "[entrypoint] playwright-cli skill installed."
+# --- Playwright browser automation (opt-in via SEALPOD_BROWSER_ENABLED) ---
+if [ "${SEALPOD_BROWSER_ENABLED:-false}" = "true" ]; then
+  # Install microsoft/playwright-cli skill (not a marketplace — standalone skill repo)
+  PLAYWRIGHT_SKILL_DIR="${CLAUDE_CONFIG_DIR}/skills/playwright-cli"
+  if [ ! -d "$PLAYWRIGHT_SKILL_DIR" ]; then
+    echo "[entrypoint] Installing playwright-cli skill..."
+    if gosu node git clone --depth 1 --filter=blob:none --sparse \
+      https://github.com/microsoft/playwright-cli.git /tmp/playwright-cli 2>/dev/null; then
+      (cd /tmp/playwright-cli && gosu node git sparse-checkout set skills/playwright-cli 2>/dev/null)
+      gosu node mkdir -p "${CLAUDE_CONFIG_DIR}/skills"
+      gosu node cp -r /tmp/playwright-cli/skills/playwright-cli "$PLAYWRIGHT_SKILL_DIR"
+      rm -rf /tmp/playwright-cli
+      echo "[entrypoint] playwright-cli skill installed."
+    else
+      echo "[entrypoint] WARNING: Failed to clone playwright-cli skill." >&2
+    fi
   else
-    echo "[entrypoint] WARNING: Failed to clone playwright-cli skill." >&2
+    echo "[entrypoint] playwright-cli skill already installed."
+  fi
+
+  # Deploy default Playwright CLI config (if not already customized)
+  PLAYWRIGHT_CONFIG="/workspace/.playwright/cli.config.json"
+  if [ ! -f "$PLAYWRIGHT_CONFIG" ]; then
+    gosu node mkdir -p /workspace/.playwright
+    gosu node cp /usr/local/share/sealpod/playwright-cli.config.json "$PLAYWRIGHT_CONFIG"
+    echo "[entrypoint] Playwright CLI config deployed (file:// blocked, isolated sessions)."
   fi
 else
-  echo "[entrypoint] playwright-cli skill already installed."
-fi
-
-# --- Deploy default Playwright CLI config (if not already customized) ---
-PLAYWRIGHT_CONFIG="/workspace/.playwright/cli.config.json"
-if [ ! -f "$PLAYWRIGHT_CONFIG" ]; then
-  gosu node mkdir -p /workspace/.playwright
-  gosu node cp /usr/local/share/sealpod/playwright-cli.config.json "$PLAYWRIGHT_CONFIG"
-  echo "[entrypoint] Playwright CLI config deployed (file:// blocked, isolated sessions)."
+  echo "[entrypoint] Browser automation disabled (SEALPOD_BROWSER_ENABLED=false)."
+  # Remove skill if previously installed (clean toggle-off)
+  if [ -d "${CLAUDE_CONFIG_DIR}/skills/playwright-cli" ]; then
+    rm -rf "${CLAUDE_CONFIG_DIR}/skills/playwright-cli"
+    echo "[entrypoint] Removed playwright-cli skill (browser disabled)."
+  fi
 fi
 
 # --- Passthrough mode: only 'claude' and 'sealpod-auth' commands allowed ---
