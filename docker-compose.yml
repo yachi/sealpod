@@ -21,7 +21,7 @@ services:
     security_opt:
       - no-new-privileges:true
       - seccomp=./chrome-seccomp.json
-      # Custom seccomp enables Chromium's namespace sandbox (CLONE_NEWUSER+CLONE_NEWPID only)
+      # Playwright official seccomp profile — enables Chromium namespace sandbox
     cap_drop:
       - ALL
     cap_add:
@@ -80,7 +80,7 @@ services:
       - CLAUDE_CONFIG_DIR=/home/node/.claude
       - GH_TOKEN=${GH_TOKEN:-}
       - DEVCONTAINER=true
-      - SEALPOD_BROWSER_ENABLED=${SEALPOD_BROWSER_ENABLED:-false}
+      - SEALPOD_BROWSER_ENABLED=${SEALPOD_BROWSER_ENABLED:-true}
       - NODE_OPTIONS=--max-old-space-size=4096
       - TZ=${TZ:-UTC}
     env_file:

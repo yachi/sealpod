@@ -101,7 +101,7 @@ docker compose run --rm sealpod claude auth status
 | `WORKSPACE_HOST_PATH` | `.` (current dir) | Host path to workspace directory |
 | `GH_CONFIG_HOST_PATH` | `~/.config/gh` | Host path for GitHub CLI config (mounted read-only; remove volume if unused) |
 | `PLAYWRIGHT_HOST_PATH` | `~/.sealpod-playwright` | Host path for Playwright browser binary cache |
-| `SEALPOD_BROWSER_ENABLED` | `false` | Enable Playwright browser automation (opt-in) |
+| `SEALPOD_BROWSER_ENABLED` | `true` | Enable Playwright browser automation |
 | `SEALPOD_MEM_LIMIT` | `2g` | Container memory limit (set `4g` when browser enabled) |
 | `SEALPOD_PIDS_LIMIT` | `512` | Container PID limit (set `1024` when browser enabled) |
 | `TZ` | `UTC` | Container timezone |
