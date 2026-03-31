@@ -6,7 +6,7 @@ Playwright browser automation is installed but **gated behind mitigations** befo
 
 ### P0 — Must-have before enabling browser
 
-- [x] **Feature flag**: `SEALPOD_BROWSER_ENABLED=false` (default off). Skill not installed when disabled; clean removal on toggle-off.
+- [x] **Feature flag**: `SEALPOD_BROWSER_ENABLED` (default on). Skill not installed when disabled; clean removal on toggle-off.
 - [x] **Custom seccomp profile**: `chrome-seccomp.json` allows `CLONE_NEWUSER`+`CLONE_NEWPID` only (blocks NEWNS/NEWNET/NEWUTS/NEWIPC/NEWCGROUP). `--no-sandbox` removed.
 - [x] **Increase tmpfs sizes**: `/tmp` → 512MB, `.cache` → 256MB, `/dev/shm` → 512MB (new). `--disable-dev-shm-usage` removed.
 - [x] **Block `file://` protocol**: `network.blockedOrigins: ["file://*"]` in `playwright-cli.config.json`.

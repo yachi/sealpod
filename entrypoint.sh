@@ -79,8 +79,8 @@ try {
 }
 '
 
-# --- Playwright browser automation (opt-in via SEALPOD_BROWSER_ENABLED) ---
-if [ "${SEALPOD_BROWSER_ENABLED:-false}" = "true" ]; then
+# --- Playwright browser automation (controlled via SEALPOD_BROWSER_ENABLED) ---
+if [ "${SEALPOD_BROWSER_ENABLED:-true}" = "true" ]; then
   # Install microsoft/playwright-cli skill (not a marketplace — standalone skill repo)
   PLAYWRIGHT_SKILL_DIR="${CLAUDE_CONFIG_DIR}/skills/playwright-cli"
   if [ ! -d "$PLAYWRIGHT_SKILL_DIR" ]; then
