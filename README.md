@@ -101,6 +101,9 @@ docker compose run --rm sealpod claude auth status
 | `WORKSPACE_HOST_PATH` | `.` (current dir) | Host path to workspace directory |
 | `GH_CONFIG_HOST_PATH` | `~/.config/gh` | Host path for GitHub CLI config (mounted read-only; remove volume if unused) |
 | `PLAYWRIGHT_HOST_PATH` | `~/.sealpod-playwright` | Host path for Playwright browser binary cache |
+| `SEALPOD_BROWSER_ENABLED` | `false` | Enable Playwright browser automation (opt-in) |
+| `SEALPOD_MEM_LIMIT` | `2g` | Container memory limit (set `4g` when browser enabled) |
+| `SEALPOD_PIDS_LIMIT` | `512` | Container PID limit (set `1024` when browser enabled) |
 | `TZ` | `UTC` | Container timezone |
 
 ### Credential Persistence
@@ -123,8 +126,9 @@ The directory pointed to by `CLAUDE_CONFIG_HOST_PATH` is mounted into the contai
 | IPv6 disabled | `net.ipv6.conf.all.disable_ipv6: 1` (sysctl) + ip6tables DROP policies (defense-in-depth) |
 | Passthrough mode restriction | Only `claude` and `sealpod-auth` commands are allowed via passthrough |
 | PID 1 handling | `tini` via `init: true` (signal forwarding, zombie reaping) |
-| Fork bomb defense | `pids_limit: 512` |
-| Resource limits | `mem_limit: 2g`, `cpus: 2.0`, swap disabled |
+| Fork bomb defense | `pids_limit: 512` (configurable via `SEALPOD_PIDS_LIMIT`) |
+| Resource limits | `mem_limit: 2g`, `cpus: 2.0`, swap disabled (configurable via `SEALPOD_MEM_LIMIT`) |
+| Chromium sandbox | Custom seccomp profile enables `CLONE_NEWUSER`+`CLONE_NEWPID` for Chromium's namespace sandbox |
 | Noexec on tmpfs | `/tmp`, `.cache`, `.npm` mounted with `noexec` |
 | Logging | Local driver with rotation (50MB x 5 files) |
 
@@ -148,12 +152,10 @@ Sealpod configures `WorktreeCreate`/`WorktreeRemove` hooks that use `mktemp` ins
 
 ### Pre-loaded Skills
 
-Sealpod installs two skills at container startup:
-
-| Skill | Method | Source |
-|-------|--------|--------|
-| `/deep-research` | Plugin marketplace (`extraKnownMarketplaces`) | [yachi/claude-skills](https://github.com/yachi/claude-skills) |
-| `/playwright-cli` | Personal skill (sparse clone to `~/.claude/skills/`) | [microsoft/playwright-cli](https://github.com/microsoft/playwright-cli) |
+| Skill | Method | Requires | Source |
+|-------|--------|----------|--------|
+| `/deep-research` | Plugin marketplace | Always enabled | [yachi/claude-skills](https://github.com/yachi/claude-skills) |
+| `/playwright-cli` | Personal skill (sparse clone) | `SEALPOD_BROWSER_ENABLED=true` | [microsoft/playwright-cli](https://github.com/microsoft/playwright-cli) |
 
 Both are cloned via HTTPS on first startup (the firewall allows port 443) and cached on the persistent credential volume for subsequent sessions.
 
