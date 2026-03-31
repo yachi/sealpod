@@ -10,8 +10,10 @@ set -euo pipefail
 echo "[entrypoint] Starting Sealpod container..."
 
 # --- Fix tmpfs and volume ownership (Docker creates them as root) ---
-# Credential volume contents (plugins, settings) may be host-user-owned; fix recursively.
-chown -R node:node /home/node/.claude /home/node/.cache /home/node/.npm /home/node/.config \
+# Credential volume needs recursive chown (host-user-owned files inside bind mount).
+# Tmpfs dirs are empty at start — only need top-level ownership fix.
+chown -R node:node /home/node/.claude 2>/dev/null || true
+chown node:node /home/node/.cache /home/node/.npm /home/node/.config \
   /home/node/.local /home/node/.playwright-browsers 2>/dev/null || true
 
 # --- Phase 1: Firewall Setup (runs as root — requires NET_ADMIN) ---
@@ -106,11 +108,12 @@ if [ "${SEALPOD_BROWSER_ENABLED:-false}" = "true" ]; then
   fi
 else
   echo "[entrypoint] Browser automation disabled (SEALPOD_BROWSER_ENABLED=false)."
-  # Remove skill if previously installed (clean toggle-off)
+  # Remove skill and config if previously installed (clean toggle-off)
   if [ -d "${CLAUDE_CONFIG_DIR}/skills/playwright-cli" ]; then
     rm -rf "${CLAUDE_CONFIG_DIR}/skills/playwright-cli"
     echo "[entrypoint] Removed playwright-cli skill (browser disabled)."
   fi
+  rm -f /workspace/.playwright/cli.config.json 2>/dev/null || true
 fi
 
 # --- Passthrough mode: only 'claude' and 'sealpod-auth' commands allowed ---

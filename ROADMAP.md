@@ -6,11 +6,11 @@ Playwright browser automation is installed but **gated behind mitigations** befo
 
 ### P0 — Must-have before enabling browser
 
-- [ ] **Feature flag**: Add `SEALPOD_BROWSER_ENABLED=false` (default off). Block `playwright-cli install-browser` when disabled.
-- [ ] **Custom seccomp profile**: Create `chrome-seccomp.json` extending Docker's default to allow `CLONE_NEWUSER`/`unshare` for Chromium's internal sandbox. Without this, browser runs `--no-sandbox` (no defense-in-depth).
-- [ ] **Increase tmpfs sizes**: Cache → 512MB, `/tmp` → 512MB. Chromium binary (~300MB) cannot fit in current 128MB cache tmpfs — browser install fails at runtime.
-- [ ] **Block `file://` protocol**: Reject `file://` URLs in skill wrapper before they reach the browser. Currently browser can read `/workspace`, `.credentials.json`, and GitHub CLI credentials.
-- [ ] **Increase resource limits when browser enabled**: `mem_limit: 4g`, `pids_limit: 1024`. Chromium consumes ~800MB-1.2GB RAM and ~8-15 PIDs per tab.
+- [x] **Feature flag**: `SEALPOD_BROWSER_ENABLED=false` (default off). Skill not installed when disabled; clean removal on toggle-off.
+- [x] **Custom seccomp profile**: `chrome-seccomp.json` allows `CLONE_NEWUSER`+`CLONE_NEWPID` only (blocks NEWNS/NEWNET/NEWUTS/NEWIPC/NEWCGROUP). `--no-sandbox` removed.
+- [x] **Increase tmpfs sizes**: `/tmp` → 512MB, `.cache` → 256MB, `/dev/shm` → 512MB (new). `--disable-dev-shm-usage` removed.
+- [x] **Block `file://` protocol**: `network.blockedOrigins: ["file://*"]` in `playwright-cli.config.json`.
+- [x] **Increase resource limits when browser enabled**: Configurable via `SEALPOD_MEM_LIMIT` (default 2g) and `SEALPOD_PIDS_LIMIT` (default 512).
 - [ ] **Single concurrent browser instance**: Lock file or semaphore preventing multiple browser sessions per container.
 
 ### P1 — Should-have
