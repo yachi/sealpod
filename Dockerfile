@@ -89,7 +89,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh \
 ENV CLAUDE_CONFIG_DIR=/home/node/.claude \
     DEVCONTAINER=true \
     NODE_OPTIONS="--max-old-space-size=4096" \
-    PLAYWRIGHT_BROWSERS_PATH=/home/node/.playwright-browsers \
+    PLAYWRIGHT_BROWSERS_PATH=/workspace/.playwright-browsers \
     XDG_CACHE_HOME=/home/node/.cache
 
 WORKDIR /workspace
