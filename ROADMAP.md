@@ -43,20 +43,21 @@ Claude Code Channels (v2.1.80+, research preview) natively bridge Telegram into 
 
 ### Tasks
 
-- [ ] **Bump Claude Code to ≥2.1.80**: Update `CLAUDE_CODE_VERSION` in `.env.example` and `Dockerfile`. Channels require v2.1.80+.
-- [ ] **Install Bun in Dockerfile**: Official Telegram plugin requires Bun runtime (~33MB). Add `curl -fsSL https://bun.sh/install | bash` and symlink to `/usr/local/bin/bun`.
-- [ ] **Add `TELEGRAM_BOT_TOKEN` env var**: New optional env var in `.env.example`. When set, enables Telegram channel.
-- [ ] **Switch entrypoint from server mode to `--rc` mode**: Replace `claude remote-control` with `claude --rc --channels plugin:telegram@...` in Phase 2 of `entrypoint.sh`. Conditionally add `--channels` only when `TELEGRAM_BOT_TOKEN` is set.
-- [ ] **Add tmpfs for channel state**: Mount `~/.claude/channels` as tmpfs in `docker-compose.yml` for plugin runtime state.
-- [ ] **Enable `claude-plugins-official` marketplace**: Add marketplace config in Phase 0 so the Telegram plugin can be resolved.
-- [ ] **Document pairing flow**: First-run requires interactive pairing (`/telegram:access pair <code>`). Document how to pair via `docker compose exec` or via the web UI (Remote Control), then persist `access.json` on the credentials volume.
+- [x] **Bump Claude Code to ≥2.1.80**: Update `CLAUDE_CODE_VERSION` to 2.1.88 in `.env.example` and `Dockerfile`.
+- [x] **Install Bun in Dockerfile**: Official Telegram plugin requires Bun runtime (~33MB). Installed to `/usr/local/bin/bun`.
+- [x] **Add `TELEGRAM_BOT_TOKEN` env var**: New optional env var in `.env.example`. When set, enables Telegram channel.
+- [x] **Switch entrypoint from server mode to `--rc` mode**: Phase 2 conditionally uses `claude --rc --channels` (with token) or `claude remote-control` (without). Backward-compatible.
+- [x] **Enable `claude-plugins-official` marketplace**: Added in Phase 0 settings.json setup.
+- [x] **Pre-seed `access.json`**: `TELEGRAM_USER_ID` env var writes allowlist-mode access.json at startup, skipping interactive pairing.
+- [x] **Permission mode**: `SEALPOD_PERMISSION_MODE` env var (default `bypassPermissions`). Container is the security boundary.
+- [x] **TTY allocation**: `tty: true` + `stdin_open: true` in docker-compose.yml for Ink TUI in `--rc` mode.
 - [ ] **Handle `--spawn`/`--capacity` loss**: `--rc` mode supports 1 session per process. Document that concurrent sessions require multiple container instances instead of `--spawn worktree`.
 
-### Open questions
+### Resolved questions
 
-- Does `--rc` mode work headlessly (no TTY) in Docker, or does it require `--print`/non-interactive fallback?
-- Can the Telegram plugin's `access.json` be pre-seeded on the credentials volume to skip interactive pairing?
-- Should permission relay be the default (approve/deny from Telegram), or should we recommend `--dangerously-skip-permissions` for unattended use?
+- **`--rc` headless in Docker**: Yes — `tty: true` + `stdin_open: true` gives the Ink TUI a PTY. Renders into the void in detached mode. Session stays alive. (Ref: anthropics/claude-code#30447, #23874)
+- **Pre-seed `access.json`**: Yes — plain JSON, no crypto verification. Server re-reads on every message. `TELEGRAM_USER_ID` writes `{"dmPolicy":"allowlist","allowFrom":["<id>"]}` at startup.
+- **Permission mode**: Default `bypassPermissions` — container is the security boundary (read-only FS, cap drop, outbound-only firewall). Matches original `claude remote-control` server mode behavior. Override via `SEALPOD_PERMISSION_MODE=default` for Telegram permission relay.
 
 ## Other
 

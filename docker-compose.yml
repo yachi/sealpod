@@ -8,13 +8,21 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        CLAUDE_CODE_VERSION: ${CLAUDE_CODE_VERSION:-2.1.76}
-    image: sealpod:${CLAUDE_CODE_VERSION:-2.1.76}
+        CLAUDE_CODE_VERSION: ${CLAUDE_CODE_VERSION:-2.1.88}
+    image: sealpod:${CLAUDE_CODE_VERSION:-2.1.88}
     container_name: sealpod
     hostname: sealpod
 
     # --- PID 1: tini (built into Docker, zero overhead) ---
     init: true
+
+    # --- TTY allocation ---
+    # Required when TELEGRAM_BOT_TOKEN is set: --rc mode needs a PTY for the Ink TUI.
+    # The TUI renders into the allocated PTY (invisible in detached mode) while real
+    # interaction happens via Telegram (channels) and claude.ai/code (remote-control).
+    # Harmless when running server mode (no TELEGRAM_BOT_TOKEN).
+    tty: true
+    stdin_open: true
 
     # --- Security hardening ---
     read_only: true
@@ -81,6 +89,9 @@ services:
       - GH_TOKEN=${GH_TOKEN:-}
       - DEVCONTAINER=true
       - SEALPOD_BROWSER_ENABLED=${SEALPOD_BROWSER_ENABLED:-true}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_USER_ID=${TELEGRAM_USER_ID:-}
+      - SEALPOD_PERMISSION_MODE=${SEALPOD_PERMISSION_MODE:-bypassPermissions}
       - NODE_OPTIONS=--max-old-space-size=4096
       - TZ=${TZ:-UTC}
     env_file:

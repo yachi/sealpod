@@ -8,7 +8,7 @@ ARG NODE_VERSION=20
 
 FROM node:${NODE_VERSION}-bookworm-slim
 
-ARG CLAUDE_CODE_VERSION=2.1.76
+ARG CLAUDE_CODE_VERSION=2.1.88
 ARG PLAYWRIGHT_CLI_VERSION=0.1.1
 
 # OCI labels
@@ -42,6 +42,10 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 RUN PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
     npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @playwright/cli@${PLAYWRIGHT_CLI_VERSION} \
  && npm cache clean --force
+
+# Install Bun runtime (required by official Telegram/Discord channel plugins)
+RUN curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash \
+ && bun --version
 
 # Install Chromium system dependencies (requires root — cannot be done at runtime).
 # Browser binary is NOT baked in — installed on-demand to a separate volume.
