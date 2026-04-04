@@ -99,16 +99,24 @@ if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
 
   # Write bot token to channel config (plugin reads from here).
   # gosu preserves env, so exported vars are available to the child shell.
-  gosu node sh -c 'printf "TELEGRAM_BOT_TOKEN=%s\n" "$TELEGRAM_BOT_TOKEN" > "$TELEGRAM_STATE_DIR/.env"'
+  # File written 0600 to restrict token visibility.
+  gosu node sh -c 'printf "TELEGRAM_BOT_TOKEN=%s\n" "$TELEGRAM_BOT_TOKEN" > "$TELEGRAM_STATE_DIR/.env" && chmod 600 "$TELEGRAM_STATE_DIR/.env"'
 
-  # Pre-seed access.json to skip interactive pairing flow (headless container)
+  # Pre-seed access.json to skip interactive pairing flow (headless container).
+  # Validate TELEGRAM_USER_ID is numeric to prevent broken allowlists.
   if [ -n "${TELEGRAM_USER_ID:-}" ] && [ ! -f "$TELEGRAM_STATE_DIR/access.json" ]; then
+    if ! echo "${TELEGRAM_USER_ID}" | grep -qE '^[0-9]+$'; then
+      echo "[entrypoint] ERROR: TELEGRAM_USER_ID must be numeric (got: ${TELEGRAM_USER_ID})" >&2
+      exit 1
+    fi
     gosu node node -e '
       const fs = require("fs");
       const dir = process.env.TELEGRAM_STATE_DIR;
       const uid = process.env.TELEGRAM_USER_ID;
       const access = { dmPolicy: "allowlist", allowFrom: [uid], groups: {}, pending: {} };
-      fs.writeFileSync(dir + "/access.json", JSON.stringify(access, null, 2));
+      const tmp = dir + "/access.json.tmp";
+      fs.writeFileSync(tmp, JSON.stringify(access, null, 2), { mode: 0o600 });
+      fs.renameSync(tmp, dir + "/access.json");
       console.log("[entrypoint] Telegram access.json pre-seeded for user " + uid);
     '
   elif [ -f "$TELEGRAM_STATE_DIR/access.json" ]; then
