@@ -8,7 +8,7 @@ ARG NODE_VERSION=20
 
 FROM node:${NODE_VERSION}-bookworm-slim
 
-ARG CLAUDE_CODE_VERSION=2.1.88
+ARG CLAUDE_CODE_VERSION=2.1.92
 ARG PLAYWRIGHT_CLI_VERSION=0.1.1
 
 # OCI labels
@@ -44,7 +44,9 @@ RUN PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
  && npm cache clean --force
 
 # Install Bun runtime (required by official Telegram/Discord channel plugins)
-RUN curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash \
+RUN apt-get update && apt-get install -y --no-install-recommends unzip \
+ && curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash \
+ && rm -rf /var/lib/apt/lists/* \
  && bun --version
 
 # Install Chromium system dependencies (requires root — cannot be done at runtime).

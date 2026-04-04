@@ -43,7 +43,7 @@ Claude Code Channels (v2.1.80+, research preview) natively bridge Telegram into 
 
 ### Tasks
 
-- [x] **Bump Claude Code to ≥2.1.80**: Update `CLAUDE_CODE_VERSION` to 2.1.88 in `.env.example` and `Dockerfile`.
+- [x] **Bump Claude Code to ≥2.1.80**: Update `CLAUDE_CODE_VERSION` to 2.1.92 in `.env.example` and `Dockerfile`.
 - [x] **Install Bun in Dockerfile**: Official Telegram plugin requires Bun runtime (~33MB). Installed to `/usr/local/bin/bun`.
 - [x] **Add `TELEGRAM_BOT_TOKEN` env var**: New optional env var in `.env.example`. When set, enables Telegram channel.
 - [x] **Switch entrypoint from server mode to `--rc` mode**: Phase 2 conditionally uses `claude --rc --channels` (with token) or `claude remote-control` (without). Backward-compatible.
