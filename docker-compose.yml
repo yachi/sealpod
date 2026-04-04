@@ -74,8 +74,8 @@ services:
       # Do not mount directories containing SSH keys, .env files with secrets,
       # or other sensitive data unless needed for the agent's work.
       - ${WORKSPACE_HOST_PATH:-.}:/workspace:rw
-      # Playwright browser binary cache (separate from credentials)
-      - ${PLAYWRIGHT_HOST_PATH:-~/.sealpod-playwright}:/home/node/.playwright-browsers:rw
+      # Playwright browser binary cache (under workspace, avoids /home/node permission issues)
+      - ${PLAYWRIGHT_HOST_PATH:-~/.sealpod-playwright}:/workspace/.playwright-browsers:rw
       # GitHub CLI auth (read-only — optional, remove if gh is not used)
       - ${GH_CONFIG_HOST_PATH:-~/.config/gh}:/home/node/.config/gh:ro
 
