@@ -72,12 +72,60 @@ try {
     settings.enabledPlugins["deep-research@claude-skills"] = true;
   }
 
+  // Configure claude-plugins-official marketplace (Telegram/Discord channel plugins).
+  if (!settings.extraKnownMarketplaces["claude-plugins-official"]) {
+    settings.extraKnownMarketplaces["claude-plugins-official"] = {
+      source: { source: "github", repo: "anthropics/claude-plugins-official" }
+    };
+  }
+  // Enable Telegram plugin when bot token is provided.
+  if (process.env.TELEGRAM_BOT_TOKEN) {
+    if (settings.enabledPlugins["telegram@claude-plugins-official"] === undefined) {
+      settings.enabledPlugins["telegram@claude-plugins-official"] = true;
+    }
+  }
+
   fs.writeFileSync(settingsJson, JSON.stringify(settings, null, 2));
   console.log("[entrypoint] Workspace trust + mktemp hooks + plugin marketplace configured.");
 } catch(e) {
   console.error("[entrypoint] WARNING: Setup error:", e.message);
 }
 '
+
+# --- Telegram channel setup (when TELEGRAM_BOT_TOKEN is set) ---
+if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
+  export TELEGRAM_STATE_DIR="${CLAUDE_CONFIG_DIR}/channels/telegram"
+  gosu node mkdir -p "$TELEGRAM_STATE_DIR"
+
+  # Write bot token to channel config (plugin reads from here).
+  # gosu preserves env, so exported vars are available to the child shell.
+  # File written 0600 to restrict token visibility.
+  gosu node sh -c 'printf "TELEGRAM_BOT_TOKEN=%s\n" "$TELEGRAM_BOT_TOKEN" > "$TELEGRAM_STATE_DIR/.env" && chmod 600 "$TELEGRAM_STATE_DIR/.env"'
+
+  # Pre-seed access.json to skip interactive pairing flow (headless container).
+  # Validate TELEGRAM_USER_ID is numeric to prevent broken allowlists.
+  if [ -n "${TELEGRAM_USER_ID:-}" ] && [ ! -f "$TELEGRAM_STATE_DIR/access.json" ]; then
+    if ! echo "${TELEGRAM_USER_ID}" | grep -qE '^[0-9]+$'; then
+      echo "[entrypoint] ERROR: TELEGRAM_USER_ID must be numeric (got: ${TELEGRAM_USER_ID})" >&2
+      exit 1
+    fi
+    gosu node node -e '
+      const fs = require("fs");
+      const dir = process.env.TELEGRAM_STATE_DIR;
+      const uid = process.env.TELEGRAM_USER_ID;
+      const access = { dmPolicy: "allowlist", allowFrom: [uid], groups: {}, pending: {} };
+      const tmp = dir + "/access.json.tmp";
+      fs.writeFileSync(tmp, JSON.stringify(access, null, 2), { mode: 0o600 });
+      fs.renameSync(tmp, dir + "/access.json");
+      console.log("[entrypoint] Telegram access.json pre-seeded for user " + uid);
+    '
+  elif [ -f "$TELEGRAM_STATE_DIR/access.json" ]; then
+    echo "[entrypoint] Telegram access.json already exists (preserving)."
+  else
+    echo "[entrypoint] WARNING: TELEGRAM_USER_ID not set — interactive pairing required." >&2
+  fi
+  echo "[entrypoint] Telegram channel configured."
+fi
 
 # --- Playwright browser automation (controlled via SEALPOD_BROWSER_ENABLED) ---
 if [ "${SEALPOD_BROWSER_ENABLED:-true}" = "true" ]; then
@@ -200,23 +248,50 @@ req.write(body);
 req.end();
 '
 
-# --- Phase 2: Build remote-control command ---
-set -- claude remote-control
+# --- Phase 2: Build command ---
+# Two modes depending on whether Telegram channel is enabled:
+#   With TELEGRAM_BOT_TOKEN:    claude --rc --channels ... (interactive + remote-control)
+#   Without TELEGRAM_BOT_TOKEN: claude remote-control      (server mode, supports --spawn/--capacity)
+#
+# Reason: `claude remote-control` (bridgeMain.ts) rejects --channels flag.
+# `claude --rc --channels` works because both are Commander.js options on the same program.
 
-if [ -n "${RC_NAME:-}" ]; then
-  set -- "$@" --name "${RC_NAME}"
-fi
+if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
+  # Interactive + remote-control + Telegram channel
+  set -- claude --rc --channels plugin:telegram@claude-plugins-official
 
-# Default to worktree (each session gets isolated mktemp dir via hooks)
-SPAWN_MODE="${RC_SPAWN:-worktree}"
-set -- "$@" --spawn "${SPAWN_MODE}"
+  if [ -n "${RC_NAME:-}" ]; then
+    set -- "$@" --name "${RC_NAME}"
+  fi
 
-if [ -n "${RC_CAPACITY:-}" ] && [ "${RC_CAPACITY}" != "32" ]; then
-  set -- "$@" --capacity "${RC_CAPACITY}"
-fi
+  # Permission mode (default: bypassPermissions — container is the security boundary)
+  PERM_MODE="${SEALPOD_PERMISSION_MODE:-bypassPermissions}"
+  set -- "$@" --permission-mode "${PERM_MODE}"
 
-if [ "${RC_VERBOSE:-false}" = "true" ]; then
-  set -- "$@" --verbose
+  if [ "${RC_VERBOSE:-false}" = "true" ]; then
+    set -- "$@" --verbose
+  fi
+
+  # Note: --spawn/--capacity not available in --rc mode (1 session per process).
+  # For concurrent sessions, run multiple container instances.
+else
+  # Server mode (original behavior — no Telegram)
+  set -- claude remote-control
+
+  if [ -n "${RC_NAME:-}" ]; then
+    set -- "$@" --name "${RC_NAME}"
+  fi
+
+  SPAWN_MODE="${RC_SPAWN:-worktree}"
+  set -- "$@" --spawn "${SPAWN_MODE}"
+
+  if [ -n "${RC_CAPACITY:-}" ] && [ "${RC_CAPACITY}" != "32" ]; then
+    set -- "$@" --capacity "${RC_CAPACITY}"
+  fi
+
+  if [ "${RC_VERBOSE:-false}" = "true" ]; then
+    set -- "$@" --verbose
+  fi
 fi
 
 echo "[entrypoint] Executing as node: $*"

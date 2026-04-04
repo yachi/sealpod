@@ -91,7 +91,7 @@ docker compose run --rm sealpod claude auth status
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CLAUDE_CODE_VERSION` | `2.1.76` | Claude Code CLI version (pin for reproducibility) |
+| `CLAUDE_CODE_VERSION` | `2.1.92` | Claude Code CLI version (pin for reproducibility) |
 | `RC_NAME` | `sealpod` | Session name visible in claude.ai/code |
 | `RC_SPAWN` | `worktree` | Spawn mode: `same-dir` or `worktree` (worktree = isolated per-session dirs) |
 | `GH_TOKEN` | (empty) | GitHub personal access token for `gh` CLI inside container |
@@ -104,7 +104,32 @@ docker compose run --rm sealpod claude auth status
 | `SEALPOD_BROWSER_ENABLED` | `true` | Enable Playwright browser automation |
 | `SEALPOD_MEM_LIMIT` | `2g` | Container memory limit (set `4g` when browser enabled) |
 | `SEALPOD_PIDS_LIMIT` | `512` | Container PID limit (set `1024` when browser enabled) |
+| `TELEGRAM_BOT_TOKEN` | (empty) | Telegram bot token from [@BotFather](https://t.me/BotFather). Enables Telegram channel |
+| `TELEGRAM_USER_ID` | (empty) | Your numeric Telegram user ID. Pre-seeds access control (skip pairing) |
+| `SEALPOD_PERMISSION_MODE` | `bypassPermissions` | Permission mode: `bypassPermissions`, `default`, `acceptEdits`, `plan`, `auto`, `dontAsk` |
 | `TZ` | `UTC` | Container timezone |
+
+### Telegram Channel (Optional)
+
+Control your sealpod session from Telegram — send tasks, receive replies, and approve/deny tool permissions from your phone.
+
+1. Create a bot via [@BotFather](https://t.me/BotFather) on Telegram and copy the token
+2. Get your numeric user ID: DM your bot, then run:
+   ```bash
+   source .env && curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates" | jq '.result[0].message.from.id'
+   ```
+3. Add both to `.env`:
+   ```
+   TELEGRAM_BOT_TOKEN=123456789:AAH...
+   TELEGRAM_USER_ID=89337628
+   ```
+4. Rebuild and restart: `docker compose build && docker compose up -d`
+
+When `TELEGRAM_BOT_TOKEN` is set, sealpod switches from `claude remote-control` (server mode) to `claude --rc --channels` (interactive + remote-control). Both Telegram and claude.ai/code access are active simultaneously.
+
+**Permission modes:** The default `bypassPermissions` means Claude runs all tools without prompting (the container itself is the security boundary). Set `SEALPOD_PERMISSION_MODE=default` to have tool approval prompts forwarded to Telegram via permission relay.
+
+> **Note:** `--rc` mode supports 1 session per process (no `--spawn`/`--capacity`). For concurrent sessions, run multiple container instances. Without `TELEGRAM_BOT_TOKEN`, original server mode with `--spawn`/`--capacity` is used.
 
 ### Credential Persistence
 
