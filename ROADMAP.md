@@ -26,6 +26,38 @@ Playwright browser automation is installed but **gated behind mitigations** befo
 - **Chromium CVE surface**: 32 CVEs in 2026 (avg CVSS 7.9). Mitigated by container sandbox + browser sandbox (after seccomp fix). Zero-days will always exist.
 - **HTTPS exfiltration**: Port 443 is open by design. WebSocket over TLS adds persistent channels but the risk was already accepted for WebFetch/curl.
 
+## Telegram Channel Integration
+
+**User story**: As a developer, I want to control my sealpod remote-control session from Telegram on my phone, so I can send tasks, receive replies, and approve/deny tool permissions without opening claude.ai or a browser.
+
+### Background
+
+Claude Code Channels (v2.1.80+, research preview) natively bridge Telegram into a running session via an official MCP plugin (`plugin:telegram@claude-plugins-official`). The plugin uses outbound HTTPS polling (compatible with sealpod's firewall), sender allowlisting, and permission relay.
+
+**Critical finding from source code analysis (v2.1.88):** `claude remote-control` (server mode) does NOT accept `--channels` — `bridgeMain.ts` has its own `parseArgs()` that rejects unknown flags. The workaround is `claude --rc --channels`, which runs both as Commander.js options on the same program. This means switching from server mode to interactive+remote-control mode.
+
+| Launch path | `--channels`? | `--spawn`/`--capacity`? |
+|---|---|---|
+| `claude remote-control --channels ...` | **No** (rejected) | Yes |
+| `claude --rc --channels ...` | **Yes** | No (1 session/process) |
+
+### Tasks
+
+- [ ] **Bump Claude Code to ≥2.1.80**: Update `CLAUDE_CODE_VERSION` in `.env.example` and `Dockerfile`. Channels require v2.1.80+.
+- [ ] **Install Bun in Dockerfile**: Official Telegram plugin requires Bun runtime (~33MB). Add `curl -fsSL https://bun.sh/install | bash` and symlink to `/usr/local/bin/bun`.
+- [ ] **Add `TELEGRAM_BOT_TOKEN` env var**: New optional env var in `.env.example`. When set, enables Telegram channel.
+- [ ] **Switch entrypoint from server mode to `--rc` mode**: Replace `claude remote-control` with `claude --rc --channels plugin:telegram@...` in Phase 2 of `entrypoint.sh`. Conditionally add `--channels` only when `TELEGRAM_BOT_TOKEN` is set.
+- [ ] **Add tmpfs for channel state**: Mount `~/.claude/channels` as tmpfs in `docker-compose.yml` for plugin runtime state.
+- [ ] **Enable `claude-plugins-official` marketplace**: Add marketplace config in Phase 0 so the Telegram plugin can be resolved.
+- [ ] **Document pairing flow**: First-run requires interactive pairing (`/telegram:access pair <code>`). Document how to pair via `docker compose exec` or via the web UI (Remote Control), then persist `access.json` on the credentials volume.
+- [ ] **Handle `--spawn`/`--capacity` loss**: `--rc` mode supports 1 session per process. Document that concurrent sessions require multiple container instances instead of `--spawn worktree`.
+
+### Open questions
+
+- Does `--rc` mode work headlessly (no TTY) in Docker, or does it require `--print`/non-interactive fallback?
+- Can the Telegram plugin's `access.json` be pre-seeded on the credentials volume to skip interactive pairing?
+- Should permission relay be the default (approve/deny from Telegram), or should we recommend `--dangerously-skip-permissions` for unattended use?
+
 ## Other
 
 - [ ] **DCO enforcement in CI**: CONTRIBUTING.md requires DCO sign-off but CI doesn't enforce it. Add a `DCO` check job.
