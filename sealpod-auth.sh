@@ -199,6 +199,8 @@ while true; do
     # Use Retry-After header if present, otherwise exponential backoff
     RETRY_AFTER=$(grep -i 'retry-after' "$HEADER_FILE" 2>/dev/null | head -1 | tr -dc '0-9')
     if [ -n "$RETRY_AFTER" ] && [ "$RETRY_AFTER" -gt 0 ] 2>/dev/null; then
+      # Cap at 5 minutes to prevent DoS via malicious Retry-After header
+      [ "$RETRY_AFTER" -gt 300 ] && RETRY_AFTER=300
       DELAY="$RETRY_AFTER"
     else
       DELAY=$(( 2 ** RETRY ))
@@ -296,19 +298,14 @@ fi
 mkdir -p "$CRED_DIR"
 chmod 700 "$CRED_DIR"
 
-RATE_TIER_JSON="null"
-if [ -n "$RATE_TIER" ]; then
-  RATE_TIER_JSON="\"$RATE_TIER\""
-fi
-
 CRED_JSON=$(jq -n \
   --arg at "$ACCESS_TOKEN" \
   --arg rt "$REFRESH_TOKEN" \
   --argjson ea "$EXPIRES_AT" \
   --argjson sc "$SCOPES_JSON" \
   --argjson st "$SUB_TYPE" \
-  --argjson rt_tier "$RATE_TIER_JSON" \
-  '{claudeAiOauth: {accessToken: $at, refreshToken: $rt, expiresAt: $ea, scopes: $sc, subscriptionType: $st, rateLimitTier: $rt_tier}}')
+  --arg rt_tier "${RATE_TIER:-}" \
+  '{claudeAiOauth: {accessToken: $at, refreshToken: $rt, expiresAt: $ea, scopes: $sc, subscriptionType: $st, rateLimitTier: (if $rt_tier == "" then null else $rt_tier end)}}')
 
 # Atomic write
 TMPFILE=$(mktemp "${CRED_DIR}/.credentials.XXXXXX")
