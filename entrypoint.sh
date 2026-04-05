@@ -170,11 +170,21 @@ fi
 # Only 'claude' commands are permitted to prevent arbitrary shell access.
 if [ "$#" -gt 0 ]; then
   if [ "$1" = "claude" ]; then
-    echo "[entrypoint] Passthrough: $*"
-    exec capsh \
-      --drop=cap_net_admin,cap_net_raw,cap_setpcap,cap_setuid,cap_setgid,cap_kill \
-      --user=node \
-      -- -c 'exec "$@"' -- "$@"
+    # Prevent container state mutation (claude update/plugin/mcp) — only pass through
+    # commands the container is designed for.
+    case "${2:-}" in
+      remote-control|auth|--version|-v|--rc|-c|-p|-r|"")
+        echo "[entrypoint] Passthrough: $*"
+        exec capsh \
+          --drop=cap_net_admin,cap_net_raw,cap_setpcap,cap_setuid,cap_setgid,cap_kill \
+          --user=node \
+          -- -c 'exec "$@"' -- "$@"
+        ;;
+      *)
+        echo "[entrypoint] ERROR: Subcommand '$2' not allowed. Permitted: remote-control, auth, --version, --rc, -c, -p, -r" >&2
+        exit 1
+        ;;
+    esac
   elif [ "$1" = "sealpod-auth" ]; then
     shift
     echo "[entrypoint] Running sealpod-auth..."
