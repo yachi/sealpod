@@ -1,0 +1,13 @@
+# Sealpod — Trivy ignore list for known-accepted CVEs
+# Each entry documents why the CVE is accepted rather than fixed.
+
+# zlib/MiniZip integer overflow — Debian will_not_fix.
+# MiniZip code paths are not invoked by Node.js or any sealpod component.
+# Ref: https://security-tracker.debian.org/tracker/CVE-2023-45853
+CVE-2023-45853
+
+# picomatch ReDoS — fixed in 4.0.4 but pinned at 4.0.3 by @anthropic-ai/claude-code.
+# Cannot update without upstream Claude Code CLI release. Accepted: ReDoS requires
+# attacker-controlled glob input, which is not exposed in sealpod's usage.
+# Ref: https://avd.aquasec.com/nvd/cve-2026-33671
+CVE-2026-33671
