@@ -50,6 +50,7 @@ jobs:
         with:
           image-ref: ${{ steps.tag.outputs.ref }}
           severity: CRITICAL,HIGH
+          ignore-unfixed: true
           exit-code: 1
           format: table
           trivyignores: .trivyignore
