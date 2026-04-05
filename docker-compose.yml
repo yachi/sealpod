@@ -9,6 +9,7 @@ services:
       dockerfile: Dockerfile
       args:
         CLAUDE_CODE_VERSION: ${CLAUDE_CODE_VERSION:-2.1.92}
+        NODE_VERSION: ${NODE_VERSION:-22}
     image: sealpod:${CLAUDE_CODE_VERSION:-2.1.92}
     container_name: sealpod
     hostname: sealpod

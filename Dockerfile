@@ -1,10 +1,10 @@
 # =============================================================================
 # Sealpod — Docker Image
-# Single-stage build: node:20-bookworm-slim + Claude Code CLI
+# Single-stage build: node:22-bookworm-slim + Claude Code CLI
 # Outbound-only HTTPS polling — no inbound ports needed
 # =============================================================================
 
-ARG NODE_VERSION=20
+ARG NODE_VERSION=22
 
 FROM node:${NODE_VERSION}-bookworm-slim
 
@@ -46,7 +46,23 @@ RUN PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
  && npm cache clean --force
 
 # Install Bun runtime (required by official Telegram/Discord channel plugins, pinned version)
-RUN curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local BUN_VERSION=v${BUN_VERSION} bash \
+# Download from GitHub releases with SHA256 verification (mitigates Shai-Hulud-style supply chain attacks).
+# SHASUMS256.txt is fetched from the same release and used to verify the binary.
+ARG TARGETARCH
+RUN case "${TARGETARCH}" in \
+      amd64) BUN_ARCH="x64" ;; \
+      arm64) BUN_ARCH="aarch64" ;; \
+      *) echo "Unsupported arch: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+ && curl -fsSL -o /tmp/bun.zip \
+    "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-${BUN_ARCH}.zip" \
+ && curl -fsSL -o /tmp/SHASUMS256.txt \
+    "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/SHASUMS256.txt" \
+ && cd /tmp && grep "bun-linux-${BUN_ARCH}.zip" SHASUMS256.txt | sha256sum -c - \
+ && unzip -oq /tmp/bun.zip -d /tmp/bun-extract \
+ && mv "/tmp/bun-extract/bun-linux-${BUN_ARCH}/bun" /usr/local/bin/bun \
+ && chmod +x /usr/local/bin/bun \
+ && rm -rf /tmp/bun.zip /tmp/bun-extract /tmp/SHASUMS256.txt \
  && bun --version
 
 # Install Chromium system dependencies (requires root — cannot be done at runtime).
