@@ -214,7 +214,7 @@ fi
 # Server-side invalidation (rotation, concurrent sessions) can revoke tokens before
 # the client-side expiresAt. Always refresh to guarantee a fresh token.
 echo "[entrypoint] Refreshing OAuth token..."
-gosu node /usr/local/bin/sealpod-refresh.sh "[entrypoint]"
+gosu node /usr/local/bin/sealpod-refresh.sh "[entrypoint]" || echo "[entrypoint] Token refresh skipped — will rely on existing token or background loop." >&2
 
 # --- Phase 2: Build command ---
 # Two modes depending on whether Telegram channel is enabled:
