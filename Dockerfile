@@ -95,12 +95,16 @@ COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY init-firewall.sh /usr/local/bin/init-firewall.sh
 COPY healthcheck.sh /usr/local/bin/healthcheck.sh
 COPY sealpod-auth.sh /usr/local/bin/sealpod-auth.sh
+COPY sealpod-refresh.sh /usr/local/bin/sealpod-refresh.sh
+COPY sealpod-token-loop.sh /usr/local/bin/sealpod-token-loop.sh
 
 # Set permissions
 RUN chmod +x /usr/local/bin/entrypoint.sh \
              /usr/local/bin/init-firewall.sh \
              /usr/local/bin/healthcheck.sh \
-             /usr/local/bin/sealpod-auth.sh
+             /usr/local/bin/sealpod-auth.sh \
+             /usr/local/bin/sealpod-refresh.sh \
+             /usr/local/bin/sealpod-token-loop.sh
 
 # Environment
 ENV CLAUDE_CONFIG_DIR=/home/node/.claude \

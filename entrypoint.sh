@@ -214,50 +214,7 @@ fi
 # Server-side invalidation (rotation, concurrent sessions) can revoke tokens before
 # the client-side expiresAt. Always refresh to guarantee a fresh token.
 echo "[entrypoint] Refreshing OAuth token..."
-gosu node node -e '
-const fs = require("fs");
-const https = require("https");
-const path = require("path");
-
-const credFile = path.join(process.env.CLAUDE_CONFIG_DIR, ".credentials.json");
-const cred = JSON.parse(fs.readFileSync(credFile, "utf8"));
-const oauth = cred.claudeAiOauth;
-if (!oauth || !oauth.refreshToken) { console.log("[entrypoint] No refresh token — skipping."); process.exit(0); }
-
-const body = JSON.stringify({
-  grant_type: "refresh_token",
-  refresh_token: oauth.refreshToken,
-  client_id: "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
-});
-
-const url = new URL("https://platform.claude.com/v1/oauth/token");
-const req = https.request({
-  hostname: url.hostname, path: url.pathname, method: "POST",
-  headers: { "Content-Type": "application/json", "User-Agent": "axios/1.9.0", "Content-Length": Buffer.byteLength(body) }
-}, (res) => {
-  let data = "";
-  res.on("data", (c) => data += c);
-  res.on("end", () => {
-    if (res.statusCode !== 200) {
-      console.error("[entrypoint] Token refresh failed (HTTP " + res.statusCode + "): " + data);
-      console.error("[entrypoint] Re-authenticate: docker compose run --rm sealpod sealpod-auth");
-      process.exit(1);
-    }
-    const tok = JSON.parse(data);
-    oauth.accessToken = tok.access_token;
-    if (tok.refresh_token) oauth.refreshToken = tok.refresh_token;
-    oauth.expiresAt = Date.now() + (tok.expires_in || 28800) * 1000;
-    if (tok.scope) oauth.scopes = tok.scope.split(" ").filter(Boolean);
-    const tmp = credFile + ".tmp";
-    fs.writeFileSync(tmp, JSON.stringify(cred), { mode: 0o600 });
-    fs.renameSync(tmp, credFile);
-    console.log("[entrypoint] Token refreshed (expires in " + (tok.expires_in || 28800) + "s).");
-  });
-});
-req.on("error", (e) => { console.error("[entrypoint] Token refresh network error: " + e.message); process.exit(1); });
-req.write(body);
-req.end();
-'
+gosu node /usr/local/bin/sealpod-refresh.sh "[entrypoint]" || echo "[entrypoint] Token refresh skipped — will rely on existing token or background loop." >&2
 
 # --- Phase 2: Build command ---
 # Two modes depending on whether Telegram channel is enabled:
@@ -308,7 +265,9 @@ fi
 echo "[entrypoint] Executing as node: $*"
 
 # Drop ALL added capabilities and switch to node user via capsh.
+# Fork background token refresher — Claude Code does not auto-refresh expired
+# tokens mid-session (anthropics/claude-code#28827). tini reaps it on exit.
 exec capsh \
   --drop=cap_net_admin,cap_net_raw,cap_setpcap,cap_setuid,cap_setgid,cap_kill \
   --user=node \
-  -- -c 'exec "$@"' -- "$@"
+  -- -c '/usr/local/bin/sealpod-token-loop.sh & exec "$@"' -- "$@"
