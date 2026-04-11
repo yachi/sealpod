@@ -4,7 +4,7 @@
 # and retried — the loop never exits (tini reaps it when claude exits).
 
 trap 'exit 0' TERM INT
-CRED_FILE="${CLAUDE_CONFIG_DIR:?}/.credentials.json"
+export CRED_FILE="${CLAUDE_CONFIG_DIR:?}/.credentials.json"
 MIN_SLEEP=300        # 5 minutes minimum between refreshes
 MAX_FAILURES=5       # Restore backup refresh token after this many consecutive failures
 FAILURES=0
