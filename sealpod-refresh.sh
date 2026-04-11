@@ -17,7 +17,7 @@ CLIENT_ID="9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 TOKEN_URL="https://platform.claude.com/v1/oauth/token"
 UA="axios/1.9.0"
 
-CRED_FILE="${CLAUDE_CONFIG_DIR:?}/.credentials.json"
+export CRED_FILE="${CLAUDE_CONFIG_DIR:?}/.credentials.json"
 LOG_PREFIX="${1:-[refresh]}"
 
 if [ ! -f "$CRED_FILE" ]; then
