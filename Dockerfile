@@ -87,8 +87,9 @@ RUN mkdir -p /workspace \
     /tmp/claude-sessions \
  && chown -R node:node /workspace /home/node /tmp/claude-sessions
 
-# Copy Playwright CLI default config (deployed to /workspace by entrypoint if absent)
+# Copy default configs (deployed by entrypoint at runtime)
 COPY playwright-cli.config.json /usr/local/share/sealpod/playwright-cli.config.json
+COPY permission-guardrails.json /usr/local/share/sealpod/permission-guardrails.json
 
 # Copy scripts
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh

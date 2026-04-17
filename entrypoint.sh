@@ -86,6 +86,35 @@ try {
     }
   }
 
+  // --- Permission guardrails for non-bypass modes ---
+  // When SEALPOD_PERMISSION_MODE is not bypassPermissions, inject curated deny/allow rules
+  // from permission-guardrails.json. Deny rules block dangerous patterns (inline code exec,
+  // privilege escalation, supply chain). Allow rules pre-approve safe container operations.
+  // In bypassPermissions mode (default), the permission layer is skipped entirely — OS-level
+  // controls (firewall, seccomp, read-only rootfs, cap drops) are the security boundary.
+  // Some deny patterns overlap with seccomp/cap drops — kept for defense-in-depth.
+  const permMode = (process.env.SEALPOD_PERMISSION_MODE != null && process.env.SEALPOD_PERMISSION_MODE !== "")
+    ? process.env.SEALPOD_PERMISSION_MODE
+    : "bypassPermissions";
+  if (permMode !== "bypassPermissions") {
+    try {
+      const guardrails = JSON.parse(
+        fs.readFileSync("/usr/local/share/sealpod/permission-guardrails.json", "utf8")
+      );
+      settings.permissions = settings.permissions || {};
+      // Merge: base guardrails + any user-added rules (deduplicated)
+      const baseDeny = guardrails.deny || [];
+      const baseAllow = guardrails.allow || [];
+      const userDeny = settings.permissions.deny || [];
+      const userAllow = settings.permissions.allow || [];
+      settings.permissions.deny = [...new Set([...baseDeny, ...userDeny])];
+      settings.permissions.allow = [...new Set([...baseAllow, ...userAllow])];
+      console.log("[entrypoint] Permission guardrails injected (mode: " + permMode + ", deny: " + settings.permissions.deny.length + ", allow: " + settings.permissions.allow.length + ").");
+    } catch(ge) {
+      console.error("[entrypoint] WARNING: Failed to load permission guardrails:", ge.message);
+    }
+  }
+
   fs.writeFileSync(settingsJson, JSON.stringify(settings, null, 2));
   console.log("[entrypoint] Workspace trust + mktemp hooks + plugin marketplace configured.");
 } catch(e) {
