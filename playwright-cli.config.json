@@ -5,7 +5,13 @@
       "headless": true,
       "args": [
         "--disable-gpu",
-        "--disable-software-rasterizer"
+        "--disable-software-rasterizer",
+        "--disable-webgl",
+        "--disable-extensions",
+        "--disable-background-networking",
+        "--disable-sync",
+        "--webrtc-ip-handling-policy=disable_non_proxied_udp",
+        "--js-flags=--max-old-space-size=256"
       ]
     },
     "isolated": true
