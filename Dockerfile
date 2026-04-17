@@ -98,6 +98,7 @@ COPY healthcheck.sh /usr/local/bin/healthcheck.sh
 COPY sealpod-auth.sh /usr/local/bin/sealpod-auth.sh
 COPY sealpod-refresh.sh /usr/local/bin/sealpod-refresh.sh
 COPY sealpod-token-loop.sh /usr/local/bin/sealpod-token-loop.sh
+COPY sealpod-browser-lock.sh /usr/local/bin/sealpod-browser-lock.sh
 
 # Set permissions
 RUN chmod +x /usr/local/bin/entrypoint.sh \
@@ -105,7 +106,14 @@ RUN chmod +x /usr/local/bin/entrypoint.sh \
              /usr/local/bin/healthcheck.sh \
              /usr/local/bin/sealpod-auth.sh \
              /usr/local/bin/sealpod-refresh.sh \
-             /usr/local/bin/sealpod-token-loop.sh
+             /usr/local/bin/sealpod-token-loop.sh \
+             /usr/local/bin/sealpod-browser-lock.sh
+
+# Browser concurrency lock: replace playwright-cli with flock wrapper.
+# Real binary moved to playwright-cli-unwrapped; wrapper enforces single instance.
+RUN REAL_BIN=$(which playwright-cli) \
+ && mv "$REAL_BIN" "${REAL_BIN}-unwrapped" \
+ && ln -s /usr/local/bin/sealpod-browser-lock.sh "$REAL_BIN"
 
 # Environment
 ENV CLAUDE_CONFIG_DIR=/home/node/.claude \
