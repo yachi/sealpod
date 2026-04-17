@@ -11,7 +11,7 @@ Playwright browser automation is installed but **gated behind mitigations** befo
 - [x] **Increase tmpfs sizes**: `/tmp` → 512MB, `.cache` → 256MB, `/dev/shm` → 512MB (new). `--disable-dev-shm-usage` removed.
 - [x] **Block `file://` protocol**: `network.blockedOrigins: ["file://*"]` in `playwright-cli.config.json`.
 - [x] **Increase resource limits when browser enabled**: Configurable via `SEALPOD_MEM_LIMIT` (default 2g) and `SEALPOD_PIDS_LIMIT` (default 512).
-- [ ] **Single concurrent browser instance**: Lock file or semaphore preventing multiple browser sessions per container.
+- [x] **Single concurrent browser instance**: `flock` wrapper (`sealpod-browser-lock.sh`) replaces `playwright-cli` binary. Exclusive lock on `/tmp/sealpod-browser.lock` with configurable timeout (`SEALPOD_BROWSER_LOCK_TIMEOUT`, default 30s).
 
 ### P1 — Should-have
 
