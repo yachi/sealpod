@@ -15,6 +15,10 @@ set -euo pipefail
 # =============================================================================
 
 MAX_OUTPUT="${SEALPOD_BROWSER_MAX_OUTPUT:-51200}"  # 50KB default
+if ! [[ "$MAX_OUTPUT" =~ ^[0-9]+$ ]] || [ "$MAX_OUTPUT" -lt 1024 ]; then
+  echo "[sealpod] WARNING: Invalid SEALPOD_BROWSER_MAX_OUTPUT='$MAX_OUTPUT', using default 51200" >&2
+  MAX_OUTPUT=51200
+fi
 OUTPUT_DIR="${PLAYWRIGHT_CLI_OUTPUT_DIR:-.playwright-cli}"
 
 # --- Domain allowlist (defense-in-depth, bypassable — not primary control) ---
