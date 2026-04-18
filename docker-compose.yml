@@ -65,6 +65,9 @@ services:
       - /home/node/.npm:rw,nosuid,noexec,size=128m
       - /home/node/.config:rw,nosuid,noexec,size=64m
       - /home/node/.local:rw,nosuid,noexec,size=64m
+      # Playwright CLI config overlay — isolates container config from host's
+      # .playwright/ on the workspace bind mount. Each side keeps its own config.
+      - /workspace/.playwright:rw,nosuid,noexec,size=1m
 
     # --- Volumes ---
     volumes:

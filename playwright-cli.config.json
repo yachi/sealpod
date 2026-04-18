@@ -6,6 +6,7 @@
       "args": [
         "--disable-gpu",
         "--disable-software-rasterizer",
+        "--disable-crashpad",
         "--disable-webgl",
         "--disable-extensions",
         "--disable-background-networking",

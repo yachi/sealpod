@@ -120,7 +120,8 @@ ENV CLAUDE_CONFIG_DIR=/home/node/.claude \
     DEVCONTAINER=true \
     NODE_OPTIONS="--max-old-space-size=4096" \
     PLAYWRIGHT_BROWSERS_PATH=/workspace/.playwright-browsers \
-    XDG_CACHE_HOME=/home/node/.cache
+    XDG_CACHE_HOME=/home/node/.cache \
+    XDG_CONFIG_HOME=/home/node/.config
 
 WORKDIR /workspace
 
