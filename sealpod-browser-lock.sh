@@ -6,10 +6,16 @@ set -euo pipefail
 #
 # 1. Single concurrent instance: exclusive flock on /tmp/sealpod-browser.lock.
 # 2. Domain allowlist: PLAYWRIGHT_ALLOWED_DOMAINS restricts navigation targets.
+# 3. Content sanitization: truncate output files to SEALPOD_BROWSER_MAX_OUTPUT
+#    bytes (default 50KB). Accessibility tree snapshots already exclude hidden
+#    elements, <script>, <meta>, and HTML comments by nature.
 #
 # Installed as /usr/local/bin/playwright-cli, replacing the npm symlink
 # (real binary moved to playwright-cli-unwrapped).
 # =============================================================================
+
+MAX_OUTPUT="${SEALPOD_BROWSER_MAX_OUTPUT:-51200}"  # 50KB default
+OUTPUT_DIR="${PLAYWRIGHT_CLI_OUTPUT_DIR:-.playwright-cli}"
 
 # --- Domain allowlist (defense-in-depth, bypassable — not primary control) ---
 # PLAYWRIGHT_ALLOWED_DOMAINS: comma-separated list of allowed domains.
@@ -57,4 +63,31 @@ if ! flock --timeout "$LOCK_TIMEOUT" 9; then
   exit 1
 fi
 
-exec playwright-cli-unwrapped "$@"
+# --- Record pre-existing output files (to identify new ones after command) ---
+declare -A EXISTING_FILES
+if [ -d "$OUTPUT_DIR" ]; then
+  while IFS= read -r -d '' f; do
+    EXISTING_FILES["$f"]=1
+  done < <(find "$OUTPUT_DIR" -type f -print0 2>/dev/null)
+fi
+
+# --- Run playwright-cli (no exec — need post-processing) ---
+EXIT_CODE=0
+playwright-cli-unwrapped "$@" || EXIT_CODE=$?
+
+# --- Content sanitization: truncate new output files exceeding size cap ---
+if [ -d "$OUTPUT_DIR" ]; then
+  while IFS= read -r -d '' f; do
+    [ -z "${EXISTING_FILES[$f]+x}" ] || continue  # skip pre-existing files
+    SIZE=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f" 2>/dev/null || echo 0)
+    if [ "$SIZE" -gt "$MAX_OUTPUT" ]; then
+      TRUNCATED_NOTICE=$'\n\n[sealpod] OUTPUT TRUNCATED: original size '"$SIZE"' bytes, limit '"$MAX_OUTPUT"' bytes.'
+      head -c "$MAX_OUTPUT" "$f" > "${f}.tmp"
+      printf '%s\n' "$TRUNCATED_NOTICE" >> "${f}.tmp"
+      mv "${f}.tmp" "$f"
+      echo "[sealpod] Truncated output: $f ($SIZE → $MAX_OUTPUT bytes)" >&2
+    fi
+  done < <(find "$OUTPUT_DIR" -type f -print0 2>/dev/null)
+fi
+
+exit "$EXIT_CODE"

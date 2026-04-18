@@ -15,7 +15,7 @@ Playwright browser automation is installed but **gated behind mitigations** befo
 
 ### P1 — Should-have
 
-- [ ] **Content sanitization layer**: Strip hidden text (`display:none`, `visibility:hidden`), HTML comments, `<script>` contents, and `<meta>` tags from Playwright output before returning to Claude's context. Limit returned text to 50KB.
+- [x] **Content sanitization layer**: Accessibility tree snapshots (YAML) inherently exclude hidden text, `<script>`, `<meta>`, and HTML comments. Output size capped at `SEALPOD_BROWSER_MAX_OUTPUT` (default 50KB) — new files in outputDir truncated with notice after each command.
 - [x] **Chromium hardening flags**: `--disable-webgl`, `--disable-extensions`, `--disable-background-networking`, `--disable-sync`, `--webrtc-ip-handling-policy=disable_non_proxied_udp`, `--js-flags=--max-old-space-size=256`. Note: `--disable-webrtc` is not a valid Chromium flag — replaced with `--webrtc-ip-handling-policy`. `--disable-plugins` dropped (NPAPI removed since Chrome 47).
 - [x] **Isolated browser sessions**: Already handled by `"isolated": true` in `playwright-cli.config.json` — in-memory profile, no persistence across sessions. All state discarded on browser close.
 - [x] **Domain allowlist**: `PLAYWRIGHT_ALLOWED_DOMAINS` env var (comma-separated). Validated in `sealpod-browser-lock.sh` for `goto`/`open` commands. Matches exact domain or subdomains. Unset = all domains allowed (firewall is primary control).
