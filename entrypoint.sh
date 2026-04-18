@@ -177,11 +177,9 @@ if [ "${SEALPOD_BROWSER_ENABLED:-true}" = "true" ]; then
     echo "[entrypoint] playwright-cli skill already installed."
   fi
 
-  # Deploy container-hardened Playwright CLI config (always overwrite — host config
-  # on workspace mount may contain macOS-specific executablePath or lack container
-  # hardening flags like --disable-crashpad. Host-side browser path and headless
-  # mode are set via PLAYWRIGHT_MCP_EXECUTABLE_PATH and PLAYWRIGHT_MCP_HEADLESS
-  # env vars, which override config file values.)
+  # Deploy container-hardened Playwright CLI config to tmpfs overlay.
+  # /workspace/.playwright is a container-local tmpfs (docker-compose.yml),
+  # isolating the container config from the host's workspace volume.
   PLAYWRIGHT_CONFIG="/workspace/.playwright/cli.config.json"
   gosu node mkdir -p /workspace/.playwright
   gosu node cp /usr/local/share/sealpod/playwright-cli.config.json "$PLAYWRIGHT_CONFIG"
