@@ -177,13 +177,15 @@ if [ "${SEALPOD_BROWSER_ENABLED:-true}" = "true" ]; then
     echo "[entrypoint] playwright-cli skill already installed."
   fi
 
-  # Deploy default Playwright CLI config (if not already customized)
+  # Deploy container-hardened Playwright CLI config (always overwrite — host config
+  # on workspace mount may contain macOS-specific executablePath or lack container
+  # hardening flags like --disable-crashpad. Host-side browser path and headless
+  # mode are set via PLAYWRIGHT_MCP_EXECUTABLE_PATH and PLAYWRIGHT_MCP_HEADLESS
+  # env vars, which override config file values.)
   PLAYWRIGHT_CONFIG="/workspace/.playwright/cli.config.json"
-  if [ ! -f "$PLAYWRIGHT_CONFIG" ]; then
-    gosu node mkdir -p /workspace/.playwright
-    gosu node cp /usr/local/share/sealpod/playwright-cli.config.json "$PLAYWRIGHT_CONFIG"
-    echo "[entrypoint] Playwright CLI config deployed (file:// blocked, isolated sessions)."
-  fi
+  gosu node mkdir -p /workspace/.playwright
+  gosu node cp /usr/local/share/sealpod/playwright-cli.config.json "$PLAYWRIGHT_CONFIG"
+  echo "[entrypoint] Playwright CLI config deployed (file:// blocked, isolated sessions)."
 else
   echo "[entrypoint] Browser automation disabled (SEALPOD_BROWSER_ENABLED=false)."
   # Remove skill and config if previously installed (clean toggle-off)
