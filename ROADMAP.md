@@ -15,7 +15,11 @@ Playwright browser automation is installed but **gated behind mitigations** befo
 
 ### P1 — Should-have
 
-- [x] **Content sanitization layer**: Accessibility tree snapshots (YAML) inherently exclude hidden text, `<script>`, `<meta>`, and HTML comments. Output size capped at `SEALPOD_BROWSER_MAX_OUTPUT` (default 50KB) — new files in outputDir truncated with notice after each command.
+- [x] **Content sanitization layer**: Defense-in-depth output bounding across all channels:
+  - **File output** (action command snapshots, screenshots, PDFs): capped at `SEALPOD_BROWSER_MAX_OUTPUT` (default 50KB) in `sealpod-browser-lock.sh`. Action commands (`click`, `fill`, etc.) write snapshots to `outputDir` files automatically — the wrapper truncates any file exceeding the cap.
+  - **Stdout output** (explicit `browser_snapshot` without `--filename`, `eval` results): capped at 30K chars by Claude Code's built-in Bash tool truncation (`BASH_MAX_OUTPUT_LENGTH`). Middle-truncation preserves head+tail.
+  - **A11y tree exclusions**: Accessibility tree snapshots inherently exclude `display:none`, `visibility:hidden`, `aria-hidden="true"` elements, `<script>`, `<meta>`, and HTML comments (per W3C HTML-AAM spec). Note: `aria-label`, off-screen text, and `sr-only` CSS ARE included — see P2 prompt injection risk.
+  - **Input validation**: `SEALPOD_BROWSER_MAX_OUTPUT` validated as positive integer ≥1024; invalid values fall back to 51200 with warning.
 - [x] **Chromium hardening flags**: `--disable-webgl`, `--disable-extensions`, `--disable-background-networking`, `--disable-sync`, `--webrtc-ip-handling-policy=disable_non_proxied_udp`, `--js-flags=--max-old-space-size=256`. Note: `--disable-webrtc` is not a valid Chromium flag — replaced with `--webrtc-ip-handling-policy`. `--disable-plugins` dropped (NPAPI removed since Chrome 47).
 - [x] **Isolated browser sessions**: Already handled by `"isolated": true` in `playwright-cli.config.json` — in-memory profile, no persistence across sessions. All state discarded on browser close.
 - [x] **Domain allowlist**: `PLAYWRIGHT_ALLOWED_DOMAINS` env var (comma-separated). Validated in `sealpod-browser-lock.sh` for `goto`/`open` commands. Matches exact domain or subdomains. Unset = all domains allowed (firewall is primary control).
