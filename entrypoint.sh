@@ -16,6 +16,7 @@ chown -R node:node /home/node/.claude 2>/dev/null || true
 chown node:node /home/node/.cache /home/node/.npm /home/node/.config \
   /home/node/.local 2>/dev/null || true
 chown -R node:node /workspace/.playwright-browsers 2>/dev/null || true
+chown node:node /workspace/.playwright 2>/dev/null || true
 
 # --- Phase 1: Firewall Setup (runs as root — requires NET_ADMIN) ---
 # Firewall applies in ALL modes including passthrough.
